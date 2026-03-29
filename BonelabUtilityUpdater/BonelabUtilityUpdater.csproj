@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <AssemblyName>BonelabUtilityUpdater</AssemblyName>
+    <RootNamespace>BonelabUtilityUpdater</RootNamespace>
+    <LangVersion>latest</LangVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="MelonLoader">
+      <HintPath>D:\SteamLibrary\steamapps\common\BONELAB\MelonLoader\net35\MelonLoader.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+
+</Project>

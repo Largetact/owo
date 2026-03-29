@@ -1,0 +1,13 @@
+bin/
+obj/
+*.dll
+*.pdb
+*.exe
+*.user
+.vs/
+.vscode/
+Decompiled Stuff/
+DLL stuff/
+dnSpy/
+Saves/
+temp_*.txt

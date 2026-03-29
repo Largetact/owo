@@ -1,0 +1,53 @@
+---- TODO list ----
+
+Add projectile count to Drop On Player
+
+new variants on Explosive Punch (Black Flash Variants, Smaller explosion Variant)
+
+(!) Unbreakable Grip (Climbing issue, when grab player instantly ungrab -- make it so grab remain true)
+
+(?) Homing projectile for Object
+
+Add spin velocity adjust
+
+(!!!) Safety Grip for Object Launcher
+
+Hand Orientated mode for dashing
+
+(!!!) left hand mode for Launcher
+
+(!!!) Clean up the menu
+
+Force Grab anywhere (Specific Item/Global)
+
+Waypoint (Projectile/Velocity-based movement)
+
+Waypoint Selector
+
+Code mods save settings
+
+(!!!) Fix god mode
+
+Anti-Constraint (???)
+
+AutoUpdater (?)
+
+(!) Fix auto refill ammo for Shotgun/Breach loaded variant
+
+REMOVE OBJECT LAUNCHER SEARCHER (!!!)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

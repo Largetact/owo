@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <AssemblyName>BonelabUtilityMod</AssemblyName>
+    <RootNamespace>BonelabUtilityMod</RootNamespace>
+    <LangVersion>latest</LangVersion>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <!-- MelonLoader and BoneLib References -->
+  <!-- Bonelab Installation: D:\SteamLibrary\steamapps\common\BONELAB -->
+  <ItemGroup>
+    <Reference Include="Assembly-CSharp">
+      <HintPath>D:\SteamLibrary\steamapps\common\BONELAB\MelonLoader\Il2CppAssemblies\Assembly-CSharp.dll</HintPath>
+    </Reference>
+    <Reference Include="BoneLib">
+      <HintPath>D:\SteamLibrary\steamapps\common\BONELAB\Mods\BoneLib.dll</HintPath>
+    </Reference>
+    <Reference Include="MelonLoader">
+      <HintPath>D:\SteamLibrary\steamapps\common\BONELAB\MelonLoader\net35\MelonLoader.dll</HintPath>
+    </Reference>
+    <Reference Include="Il2Cppmscorlib">
+      <HintPath>D:\SteamLibrary\steamapps\common\BONELAB\MelonLoader\Il2CppAssemblies\Il2Cppmscorlib.dll</HintPath>
+    </Reference>
+    <Reference Include="Il2CppInterop.Runtime">
+      <HintPath>D:\SteamLibrary\steamapps\common\BONELAB\MelonLoader\net6\Il2CppInterop.Runtime.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine">
+      <HintPath>D:\SteamLibrary\steamapps\common\BONELAB\MelonLoader\Il2CppAssemblies\UnityEngine.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>D:\SteamLibrary\steamapps\common\BONELAB\MelonLoader\Il2CppAssemblies\UnityEngine.CoreModule.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine.PhysicsModule">
+      <HintPath>D:\SteamLibrary\steamapps\common\BONELAB\MelonLoader\Il2CppAssemblies\UnityEngine.PhysicsModule.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine.ParticleSystemModule">
+      <HintPath>D:\SteamLibrary\steamapps\common\BONELAB\MelonLoader\Il2CppAssemblies\UnityEngine.ParticleSystemModule.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine.InputLegacyModule">
+      <HintPath>D:\SteamLibrary\steamapps\common\BONELAB\MelonLoader\Il2CppAssemblies\UnityEngine.InputLegacyModule.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine.XRModule">
+      <HintPath>D:\SteamLibrary\steamapps\common\BONELAB\MelonLoader\Il2CppAssemblies\UnityEngine.XRModule.dll</HintPath>
+    </Reference>
+    <Reference Include="Il2CppSLZ.Marrow">
+      <HintPath>D:\SteamLibrary\steamapps\common\BONELAB\MelonLoader\Il2CppAssemblies\Il2CppSLZ.Marrow.dll</HintPath>
+    </Reference>
+    <Reference Include="Assembly-CSharp">
+      <HintPath>D:\SteamLibrary\steamapps\common\BONELAB\MelonLoader\Il2CppAssemblies\Assembly-CSharp.dll</HintPath>
+    </Reference>
+    <Reference Include="UnityEngine.IMGUIModule">
+      <HintPath>D:\SteamLibrary\steamapps\common\BONELAB\MelonLoader\Il2CppAssemblies\UnityEngine.IMGUIModule.dll</HintPath>
+    </Reference>
+    <Reference Include="Il2CppUniTask">
+      <HintPath>D:\SteamLibrary\steamapps\common\BONELAB\MelonLoader\Il2CppAssemblies\Il2CppUniTask.dll</HintPath>
+    </Reference>
+    <Reference Include="0Harmony">
+      <HintPath>D:\SteamLibrary\steamapps\common\BONELAB\MelonLoader\net6\0Harmony.dll</HintPath>
+    </Reference>
+    <Reference Include="LabFusion">
+      <HintPath>D:\SteamLibrary\steamapps\common\BONELAB\Mods\LabFusion.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="Decompiled Stuff\\**\\*.cs" />
+    <Compile Remove="DEPRECATED\\**\\*.cs" />
+    <Compile Remove="decompiled_LabFusion\\**\\*.cs" />
+    <Compile Remove="decompiled_Teleportation\\**\\*.cs" />
+    <Compile Remove="decompiled_PowerTools\\**\\*.cs" />
+    <Compile Remove="decompiled_GunTweaker\\**\\*.cs" />
+    <Compile Remove="decompiled_AvatarStatsLoader\\**\\*.cs" />
+    <Compile Remove="decompiled_BoneFPS\\**\\*.cs" />
+    <Compile Remove="decompiled_FusionProtector\\**\\*.cs" />
+    <Compile Remove="Gun_decompiled.txt\\**\\*.cs" />
+    <Compile Remove="AvatarStatsLoader_decompiled.cs" />
+    <Compile Remove="StandaloneBodyLogColor\\**\\*.cs" />
+    <Compile Remove="StandaloneRagdoll\\**\\*.cs" />
+    <Compile Remove="StandaloneObjectLauncher\\**\\*.cs" />
+    <Compile Remove="BonelabUtilityUpdater\\**\\*.cs" />
+  </ItemGroup>
+
+</Project>
