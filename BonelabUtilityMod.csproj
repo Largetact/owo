@@ -7,7 +7,7 @@
     <RootNamespace>BonelabUtilityMod</RootNamespace>
     <LangVersion>latest</LangVersion>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <Version>4.0.0</Version>
+    <Version>4.1.0</Version>
   </PropertyGroup>
 
   <!-- MelonLoader and BoneLib References -->

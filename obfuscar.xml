@@ -1,0 +1,36 @@
+<?xml version='1.0'?>
+<Obfuscator>
+  <Var name="InPath" value="bin\Debug\net6.0" />
+  <Var name="OutPath" value="bin\Obfuscated" />
+  <Var name="KeepPublicApi" value="false" />
+  <Var name="HidePrivateApi" value="true" />
+  <Var name="HideStrings" value="true" />
+  <Var name="UseUnicodeNames" value="true" />
+  <Var name="ReuseNames" value="true" />
+  <Var name="RenameFields" value="true" />
+  <Var name="RenameProperties" value="true" />
+  <Var name="RenameEvents" value="true" />
+  <Var name="OptimizeMethods" value="true" />
+
+  <Module file="$(InPath)\BonelabUtilityMod.dll">
+
+    <!-- MelonLoader entry point — must keep class name + namespace -->
+    <SkipType name="BonelabUtilityMod.Main" />
+
+    <!-- Harmony patch methods are found by name — skip renaming *Prefix/*Postfix -->
+    <SkipMethod type="*" name="*Prefix" rx="true" />
+    <SkipMethod type="*" name="*Postfix" rx="true" />
+
+    <!-- MelonMod lifecycle methods -->
+    <SkipMethod type="*" name="OnInitializeMelon" rx="true" />
+    <SkipMethod type="*" name="OnUpdate" rx="true" />
+    <SkipMethod type="*" name="OnFixedUpdate" rx="true" />
+    <SkipMethod type="*" name="OnLateUpdate" rx="true" />
+    <SkipMethod type="*" name="OnSceneWasLoaded" rx="true" />
+    <SkipMethod type="*" name="OnSceneWasInitialized" rx="true" />
+    <SkipMethod type="*" name="OnApplicationQuit" rx="true" />
+    <SkipMethod type="*" name="OnPreInitialization" rx="true" />
+    <SkipMethod type="*" name="OnGUI" rx="true" />
+
+  </Module>
+</Obfuscator>

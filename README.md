@@ -1,6 +1,6 @@
 # OwO — Bonelab Utility Mod
 
-> v4.0.0 — A comprehensive MelonLoader utility mod for BONELAB.
+> v4.1.0 — A comprehensive MelonLoader utility mod for BONELAB.
 
 ---
 
