@@ -53,6 +53,10 @@ namespace BonelabUtilityMod
         private static PropertyInfo _matchmakerProp;
         private static MethodInfo _requestLobbiesMethod;
 
+        // Lobby ID-based rejoin (for browser joins where code lookup fails)
+        private static ulong _queueLobbyId = 0;
+        private static MethodInfo _joinServerMethod;  // SteamNetworkLayer.JoinServer(SteamId)
+
         // ─── Public Properties ───
 
         public static bool Enabled
@@ -445,26 +449,34 @@ namespace BonelabUtilityMod
                     Main.MelonLog.Msg($"[Queue] Fallback lobby code lookup: {code ?? "failed"}");
                 }
 
+                ulong lobbyId = _pendingLobbyId;
                 _pendingJoinCode = null;
                 _pendingLobbyId = 0;
 
-                if (string.IsNullOrEmpty(code))
+                if (string.IsNullOrEmpty(code) && lobbyId != 0)
                 {
-                    Main.MelonLog.Warning("[Queue] Server full detected but could not determine server code");
+                    // No code available but we have the lobby ID — queue by lobby ID directly
+                    Main.MelonLog.Msg($"[Queue] Server full detected! Auto-queuing by lobby ID: {lobbyId}");
+                    if (_isInQueue) StopQueue();
+                    _queueLobbyId = lobbyId;
+                    _lastServerCode = $"lobby:{lobbyId}";
+                    StartQueue();
+                }
+                else if (!string.IsNullOrEmpty(code))
+                {
+                    Main.MelonLog.Msg($"[Queue] Server full detected! Auto-queuing for code: {code}");
+                    if (_isInQueue && _lastServerCode == code) return;
+                    if (_isInQueue) StopQueue();
+                    _queueLobbyId = 0;
+                    _lastServerCode = code;
+                    StartQueue();
+                }
+                else
+                {
+                    Main.MelonLog.Warning("[Queue] Server full detected but could not determine server code or lobby ID");
                     NotificationHelper.Send(NotificationType.Warning,
                         "Server full — enter code manually to queue");
-                    return;
                 }
-
-                Main.MelonLog.Msg($"[Queue] Server full detected! Auto-queuing for: {code}");
-
-                // Don't restart if already queued for this code
-                if (_isInQueue && _lastServerCode == code) return;
-
-                // Auto-start queue
-                if (_isInQueue) StopQueue();
-                _lastServerCode = code;
-                StartQueue();
             }
             catch (Exception ex)
             {
@@ -560,6 +572,7 @@ namespace BonelabUtilityMod
                     $"Queue complete! Joined after {_attemptCount} attempt(s)");
                 _isInQueue = false;
                 _isAttemptingJoin = false;
+                _queueLobbyId = 0;
                 StopCoroutine();
             }
         }
@@ -607,6 +620,7 @@ namespace BonelabUtilityMod
             {
                 _isInQueue = false;
                 _isAttemptingJoin = false;
+                _queueLobbyId = 0;
                 NotificationHelper.Send(NotificationType.Information, "Queue stopped");
                 Main.MelonLog.Msg("[Queue] Queue stopped");
             }
@@ -645,6 +659,13 @@ namespace BonelabUtilityMod
 
             try
             {
+                // If we have a lobby ID, join directly by ID instead of going through matchmaker
+                if (_queueLobbyId != 0)
+                {
+                    JoinByLobbyId(_queueLobbyId);
+                    return;
+                }
+
                 if (_layerProp == null)
                 {
                     Main.MelonLog.Warning("[Queue] NetworkLayerManager.Layer not resolved");
@@ -725,6 +746,87 @@ namespace BonelabUtilityMod
             catch (Exception ex)
             {
                 Main.MelonLog.Warning($"[Queue] InvokeRequestLobbies error: {ex.Message}");
+                _isAttemptingJoin = false;
+            }
+        }
+
+        /// <summary>
+        /// Join a server directly by its Steam lobby ID, bypassing the matchmaker/code path.
+        /// Uses reflection to call SteamNetworkLayer.JoinServer(SteamId).
+        /// </summary>
+        private static void JoinByLobbyId(ulong lobbyId)
+        {
+            try
+            {
+                Main.MelonLog.Msg($"[Queue] Attempting direct lobby join: {lobbyId} (attempt #{_attemptCount})");
+
+                if (_layerProp == null)
+                {
+                    Main.MelonLog.Warning("[Queue] NetworkLayerManager.Layer not resolved");
+                    _isAttemptingJoin = false;
+                    StopQueue();
+                    return;
+                }
+
+                var layer = _layerProp.GetValue(null);
+                if (layer == null)
+                {
+                    Main.MelonLog.Warning("[Queue] Network layer is null");
+                    _isAttemptingJoin = false;
+                    StopQueue();
+                    return;
+                }
+
+                // Resolve JoinServer method if not yet cached
+                if (_joinServerMethod == null)
+                {
+                    _joinServerMethod = layer.GetType().GetMethod("JoinServer",
+                        BindingFlags.Public | BindingFlags.Instance);
+                }
+
+                if (_joinServerMethod == null)
+                {
+                    Main.MelonLog.Warning("[Queue] JoinServer method not found on network layer");
+                    _isAttemptingJoin = false;
+                    StopQueue();
+                    return;
+                }
+
+                // Build a SteamId from the ulong lobby ID
+                var paramType = _joinServerMethod.GetParameters()[0].ParameterType;
+                object steamIdArg;
+
+                if (paramType == typeof(ulong))
+                {
+                    steamIdArg = lobbyId;
+                }
+                else
+                {
+                    // SteamId is a struct — construct it and set .Value
+                    steamIdArg = Activator.CreateInstance(paramType);
+                    var valueField = paramType.GetField("Value", BindingFlags.Public | BindingFlags.Instance);
+                    if (valueField != null)
+                    {
+                        steamIdArg = Activator.CreateInstance(paramType);
+                        valueField.SetValue(steamIdArg, lobbyId);
+                    }
+                    else
+                    {
+                        // Try implicit conversion from ulong
+                        var op = paramType.GetMethod("op_Implicit",
+                            BindingFlags.Public | BindingFlags.Static,
+                            null, new[] { typeof(ulong) }, null);
+                        if (op != null)
+                            steamIdArg = op.Invoke(null, new object[] { lobbyId });
+                    }
+                }
+
+                _joinServerMethod.Invoke(layer, new object[] { steamIdArg });
+                _isAttemptingJoin = false;
+            }
+            catch (Exception ex)
+            {
+                Main.MelonLog.Warning($"[Queue] JoinByLobbyId error: {ex.Message}");
                 _isAttemptingJoin = false;
             }
         }
