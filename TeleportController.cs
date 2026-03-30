@@ -560,9 +560,15 @@ namespace BonelabUtilityMod
                 byte capturedSmallId = player.SmallID;
                 string capturedName = player.DisplayName;
 
-                _playerResultsPage?.CreateFunction(capturedName, Color.green, () =>
+                // Create a sub-page per player with TP options
+                var playerPage = _playerResultsPage?.CreatePage(capturedName, Color.green);
+                playerPage?.CreateFunction("TP to Them", Color.green, () =>
                 {
                     TeleportToPlayerBySmallID(capturedSmallId, capturedName);
+                });
+                playerPage?.CreateFunction("TP Them to Us", Color.magenta, () =>
+                {
+                    TeleportPlayerToMeBySmallID(capturedSmallId, capturedName);
                 });
                 resultCount++;
             }
@@ -694,6 +700,121 @@ namespace BonelabUtilityMod
             }
 
             TeleportToPlayer(targetPlayer.Value);
+        }
+
+        /// <summary>
+        /// Teleport a remote player to our position (offset 1.5m in front).
+        /// Uses the target player's RigManager.Teleport via Fusion's NetworkPlayer.
+        /// </summary>
+        public static void TeleportPlayerToMe(PlayerInfo targetPlayer)
+        {
+            try
+            {
+                var myRigManager = Player.RigManager;
+                if (myRigManager == null)
+                {
+                    SendNotification("Error", "Local RigManager not found");
+                    return;
+                }
+
+                // Get our position and forward
+                var myPhysRig = myRigManager.physicsRig;
+                Vector3 myPos = myPhysRig != null
+                    ? ((Il2CppSLZ.Marrow.Rig)myPhysRig).m_pelvis.position
+                    : ((UnityEngine.Component)myRigManager).transform.position;
+                Vector3 myForward = ((UnityEngine.Component)myRigManager).transform.forward;
+
+                // Get NetworkPlayerManager.TryGetPlayer
+                var networkPlayerManagerType = FindTypeByName("NetworkPlayerManager", "LabFusion.Entities");
+                if (networkPlayerManagerType == null)
+                {
+                    SendNotification("Error", "NetworkPlayerManager not found");
+                    return;
+                }
+
+                var tryGetPlayerMethod = networkPlayerManagerType.GetMethods(BindingFlags.Public | BindingFlags.Static)
+                    .FirstOrDefault(m => m.Name == "TryGetPlayer" && m.GetParameters().Length == 2
+                        && m.GetParameters()[0].ParameterType == typeof(byte));
+
+                if (tryGetPlayerMethod == null)
+                {
+                    SendNotification("Error", "TryGetPlayer not found");
+                    return;
+                }
+
+                var args = new object[] { targetPlayer.SmallID, null };
+                bool found = (bool)tryGetPlayerMethod.Invoke(null, args);
+
+                if (!found || args[1] == null)
+                {
+                    SendNotification("Error", $"Player not found: {targetPlayer.DisplayName}");
+                    return;
+                }
+
+                var networkPlayer = args[1];
+                var networkPlayerType = networkPlayer.GetType();
+
+                // Check HasRig
+                var hasRigProp = networkPlayerType.GetProperty("HasRig", BindingFlags.Public | BindingFlags.Instance);
+                if (hasRigProp != null && !(bool)hasRigProp.GetValue(networkPlayer))
+                {
+                    SendNotification("Error", $"{targetPlayer.DisplayName} not loaded");
+                    return;
+                }
+
+                // Get RigRefs → RigManager
+                var rigRefsProp = networkPlayerType.GetProperty("RigRefs", BindingFlags.Public | BindingFlags.Instance);
+                if (rigRefsProp == null) { SendNotification("Error", "RigRefs not found"); return; }
+
+                var rigRefs = rigRefsProp.GetValue(networkPlayer);
+                if (rigRefs == null) { SendNotification("Error", "RigRefs is null"); return; }
+
+                var rigManagerProp = rigRefs.GetType().GetProperty("RigManager", BindingFlags.Public | BindingFlags.Instance);
+                if (rigManagerProp == null) { SendNotification("Error", "RigManager not found"); return; }
+
+                var targetRigManager = rigManagerProp.GetValue(rigRefs) as Il2CppSLZ.Marrow.RigManager;
+                if (targetRigManager == null) { SendNotification("Error", "Target RigManager null"); return; }
+
+                // Teleport target player to 1.5m in front of us
+                Vector3 spawnPos = myPos + myForward * 1.5f;
+                targetRigManager.Teleport(spawnPos, -myForward);
+
+                Main.MelonLog.Msg($"Teleported {targetPlayer.DisplayName} to us");
+                SendNotification("Teleported", $"{targetPlayer.DisplayName} → You");
+            }
+            catch (Exception ex)
+            {
+                Main.MelonLog.Error($"Failed to teleport player to us: {ex.Message}");
+                SendNotification("Error", "TP to us failed");
+            }
+        }
+
+        /// <summary>
+        /// Teleport a remote player to us by SmallID
+        /// </summary>
+        public static void TeleportPlayerToMeBySmallID(byte smallId, string playerName)
+        {
+            PlayerInfo? targetPlayer = null;
+            foreach (var p in cachedPlayers)
+            {
+                if (p.SmallID == smallId)
+                {
+                    targetPlayer = p;
+                    break;
+                }
+            }
+
+            if (!targetPlayer.HasValue)
+            {
+                targetPlayer = new PlayerInfo
+                {
+                    SmallID = smallId,
+                    DisplayName = playerName,
+                    PlayerIDObj = null
+                };
+            }
+
+            TeleportPlayerToMe(targetPlayer.Value);
         }
 
         private static void SendNotification(string title, string message)

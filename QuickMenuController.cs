@@ -645,6 +645,24 @@ namespace BonelabUtilityMod
 
                     GUI.color = Color.white;
                     y += BTN_H + 2f;
+
+                    // TP buttons row
+                    bx = 10f;
+                    GUI.color = Color.green;
+                    if (GUI.Button(new Rect(bx, y, bw, BTN_H), "TP to"))
+                    {
+                        TeleportController.TeleportToPlayerBySmallID(p.SmallID, p.Username);
+                    }
+                    bx += bw + 4f;
+
+                    GUI.color = Color.magenta;
+                    if (GUI.Button(new Rect(bx, y, bw, BTN_H), "TP here"))
+                    {
+                        TeleportController.TeleportPlayerToMeBySmallID(p.SmallID, p.Username);
+                    }
+
+                    GUI.color = Color.white;
+                    y += BTN_H + 2f;
                 }
 
                 y += 4f; // gap between players

@@ -52,6 +52,8 @@ namespace BonelabUtilityMod
         private static bool _playerDash = false;
         private static bool _playerFlight = false;
         private static bool _playerRagdoll = false;
+        private static bool _playerSpinbot = false;
+        private static bool _playerBunnyHop = false;
         private static bool _playerGravBoots = false;
         private static bool _playerAntiConstraint = false;
         private static bool _playerAntiKnockout = false;
@@ -660,6 +662,40 @@ namespace BonelabUtilityMod
             return y + ROW + 2f;
         }
 
+        private static float EnumCycle(string label, ref SpinDirection mode, float y, float w)
+        {
+            var names = System.Enum.GetNames(typeof(SpinDirection));
+            float labelW = w * 0.45f;
+            float btnW = w * 0.5f;
+            GUI.Label(new Rect(PAD, y, labelW, ROW), label + ": " + mode);
+            Color ec = GUI.color;
+            GUI.color = _accentColor * new Color(1f, 1f, 1f, _menuOpacity);
+            if (GUI.Button(new Rect(PAD + labelW + 5f, y, btnW, ROW), mode.ToString(), _cachedButtonStyle))
+            {
+                mode = (SpinDirection)(((int)mode + 1) % names.Length);
+                SettingsManager.MarkDirty();
+            }
+            GUI.color = ec;
+            return y + ROW + 2f;
+        }
+
+        private static float EnumCycle(string label, ref AirStrafeMode mode, float y, float w)
+        {
+            var names = System.Enum.GetNames(typeof(AirStrafeMode));
+            float labelW = w * 0.45f;
+            float btnW = w * 0.5f;
+            GUI.Label(new Rect(PAD, y, labelW, ROW), label + ": " + mode);
+            Color ec = GUI.color;
+            GUI.color = _accentColor * new Color(1f, 1f, 1f, _menuOpacity);
+            if (GUI.Button(new Rect(PAD + labelW + 5f, y, btnW, ROW), mode.ToString(), _cachedButtonStyle))
+            {
+                mode = (AirStrafeMode)(((int)mode + 1) % names.Length);
+                SettingsManager.MarkDirty();
+            }
+            GUI.color = ec;
+            return y + ROW + 2f;
+        }
+
         // ═══════════════════════════════════════════
         //  Search functionality
         // ═══════════════════════════════════════════
@@ -1013,6 +1049,14 @@ namespace BonelabUtilityMod
                 y = Toggle(ref rg, "Grab Ragdoll", y, w);
                 RagdollController.GrabEnabled = rg;
 
+                bool rNeck = RagdollController.NeckGrabDisablesArms;
+                y = Toggle(ref rNeck, "Neck Grab Disables Arms", y, w);
+                RagdollController.NeckGrabDisablesArms = rNeck;
+
+                bool rArm = RagdollController.ArmGrabEnabled;
+                y = Toggle(ref rArm, "Arm Grab (2.5x Mass)", y, w);
+                RagdollController.ArmGrabEnabled = rArm;
+
                 bool rt = RagdollController.TantrumMode;
                 y = Toggle(ref rt, "Tantrum Mode", y, w);
                 RagdollController.TantrumMode = rt;
@@ -1081,6 +1125,60 @@ namespace BonelabUtilityMod
                     }
                     catch { }
                 });
+            }
+
+            y = Gap(y, 10f);
+            y = CollapsibleHeader("BUNNY HOP", ref _playerBunnyHop, y, w);
+            if (_playerBunnyHop)
+            {
+                bool bhEn = BunnyHopController.Enabled;
+                y = Toggle(ref bhEn, "Enabled", y, w);
+                BunnyHopController.Enabled = bhEn;
+
+                float bhBoost = BunnyHopController.HopBoost;
+                y = Slider("Hop Boost", ref bhBoost, 0f, 20f, y, w, "F1");
+                BunnyHopController.HopBoost = bhBoost;
+
+                float bhMax = BunnyHopController.MaxSpeed;
+                y = Slider("Max Speed", ref bhMax, 5f, 200f, y, w, "F0");
+                BunnyHopController.MaxSpeed = bhMax;
+
+                var bhMode = BunnyHopController.StrafeMode;
+                y = EnumCycle("Air Strafe Mode", ref bhMode, y, w);
+                BunnyHopController.StrafeMode = bhMode;
+
+                float bhStrafe = BunnyHopController.AirStrafeForce;
+                y = Slider("Air Strafe Force", ref bhStrafe, 0f, 50f, y, w, "F1");
+                BunnyHopController.AirStrafeForce = bhStrafe;
+
+                float bhJump = BunnyHopController.JumpForce;
+                y = Slider("Jump Force", ref bhJump, 1f, 20f, y, w, "F1");
+                BunnyHopController.JumpForce = bhJump;
+
+                float bhStandable = BunnyHopController.StandableNormal;
+                y = Slider("Standable Normal", ref bhStandable, 0f, 1f, y, w, "F2");
+                BunnyHopController.StandableNormal = bhStandable;
+
+                bool bhAuto = BunnyHopController.AutoHop;
+                y = Toggle(ref bhAuto, "Auto Hop", y, w);
+                BunnyHopController.AutoHop = bhAuto;
+            }
+
+            y = Gap(y, 10f);
+            y = CollapsibleHeader("SPINBOT", ref _playerSpinbot, y, w);
+            if (_playerSpinbot)
+            {
+                bool sb = SpinbotController.Enabled;
+                y = Toggle(ref sb, "Enabled", y, w);
+                SpinbotController.Enabled = sb;
+
+                float sbSpeed = SpinbotController.Speed;
+                y = Slider("Speed (°/s)", ref sbSpeed, 10f, 7200f, y, w, "F0");
+                SpinbotController.Speed = sbSpeed;
+
+                SpinDirection sbDir = SpinbotController.Direction;
+                y = EnumCycle("Direction", ref sbDir, y, w);
+                SpinbotController.Direction = sbDir;
             }
 
             y = Gap(y, 10f);

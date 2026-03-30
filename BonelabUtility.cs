@@ -83,7 +83,7 @@ namespace BonelabUtilityMod
         internal const string Name = "OwO";
         internal const string Description = "Bullshit Client for people with schizophrenia";
         internal const string Author = "XI";
-        internal const string Version = "4.1.0";
+        internal const string Version = "4.2.6";
 
         private static readonly string[] _emoticons = { "UwU", "QwQ", ".w.", "^w^", ";w;", "=w=", "-w-", "0w0", "7w7", "XwX" };
         private static int _emoticonIndex = 0;
@@ -596,6 +596,8 @@ namespace BonelabUtilityMod
             InfiniteAmmoController.Update();
             ExplosiveImpactController.Update();
             AntiGravityChangeController.Update();
+            SpinbotController.Update();
+            BunnyHopController.Update();
             OverlayMenu.CheckInput();
             QuickMenuController.CheckInput();
 
@@ -607,6 +609,7 @@ namespace BonelabUtilityMod
         public override void OnLateUpdate()
         {
             FreezePlayerController.LateUpdate();
+            SpinbotController.LateUpdate();
         }
 
         /// <summary>
@@ -625,6 +628,8 @@ namespace BonelabUtilityMod
             try { ChaosGunController.OnLevelUnloaded(); } catch { }
             try { ExplosiveImpactController.OnLevelUnloaded(); } catch { }
             try { XYZScaleController.OnLevelUnloaded(); } catch { }
+            try { BunnyHopController.OnLevelUnloaded(); } catch { }
+            try { SpinbotController.OnLevelUnloaded(); } catch { }
         }
 
         public override void OnGUI()
@@ -1048,6 +1053,96 @@ namespace BonelabUtilityMod
                 flightOffsetPage.CreateFloat("Offset Z", Color.blue, FlightController.EffectOffsetZ, 0.1f, -2f, 2f,
                     (value) => { FlightController.EffectOffsetZ = value; SettingsManager.MarkDirty(); });
 
+                // ── Bunny Hop submenu inside Player ──
+                var bhopPage = playerPage.CreatePage("Bunny Hop", Color.cyan);
+                bhopPage.CreateBool(
+                    "Enabled",
+                    Color.white,
+                    BunnyHopController.Enabled,
+                    (value) => { BunnyHopController.Enabled = value; SettingsManager.MarkDirty(); }
+                );
+                bhopPage.CreateFloat(
+                    "Hop Boost",
+                    Color.cyan,
+                    BunnyHopController.HopBoost,
+                    0.5f,
+                    0f,
+                    20f,
+                    (value) => { BunnyHopController.HopBoost = value; SettingsManager.MarkDirty(); }
+                );
+                bhopPage.CreateFloat(
+                    "Max Speed",
+                    Color.yellow,
+                    BunnyHopController.MaxSpeed,
+                    5f,
+                    5f,
+                    200f,
+                    (value) => { BunnyHopController.MaxSpeed = value; SettingsManager.MarkDirty(); }
+                );
+                bhopPage.CreateEnum(
+                    "Air Strafe Mode",
+                    Color.green,
+                    BunnyHopController.StrafeMode,
+                    (value) => { BunnyHopController.StrafeMode = (AirStrafeMode)value; SettingsManager.MarkDirty(); }
+                );
+                bhopPage.CreateFloat(
+                    "Air Strafe Force",
+                    Color.green,
+                    BunnyHopController.AirStrafeForce,
+                    1f,
+                    0f,
+                    50f,
+                    (value) => { BunnyHopController.AirStrafeForce = value; SettingsManager.MarkDirty(); }
+                );
+                bhopPage.CreateFloat(
+                    "Jump Force",
+                    Color.white,
+                    BunnyHopController.JumpForce,
+                    0.5f,
+                    1f,
+                    20f,
+                    (value) => { BunnyHopController.JumpForce = value; SettingsManager.MarkDirty(); }
+                );
+                bhopPage.CreateFloat(
+                    "Standable Normal",
+                    Color.cyan,
+                    BunnyHopController.StandableNormal,
+                    0.05f,
+                    0f,
+                    1f,
+                    (value) => { BunnyHopController.StandableNormal = value; SettingsManager.MarkDirty(); }
+                );
+                bhopPage.CreateBool(
+                    "Auto Hop",
+                    Color.magenta,
+                    BunnyHopController.AutoHop,
+                    (value) => { BunnyHopController.AutoHop = value; SettingsManager.MarkDirty(); }
+                );
+
+                // ── Spinbot submenu inside Player ──
+                var spinbotPage = playerPage.CreatePage("Spinbot", Color.magenta);
+                spinbotPage.CreateBool(
+                    "Enabled",
+                    Color.white,
+                    SpinbotController.Enabled,
+                    (value) => { SpinbotController.Enabled = value; SettingsManager.MarkDirty(); }
+                );
+                spinbotPage.CreateFloat(
+                    "Speed (°/s)",
+                    Color.cyan,
+                    SpinbotController.Speed,
+                    90f,
+                    10f,
+                    7200f,
+                    (value) => { SpinbotController.Speed = value; SettingsManager.MarkDirty(); }
+                );
+                spinbotPage.CreateEnum(
+                    "Direction",
+                    Color.green,
+                    SpinbotController.Direction,
+                    (value) => { SpinbotController.Direction = (SpinDirection)value; SettingsManager.MarkDirty(); }
+                );
+
                 // ── Gravity Boots submenu inside Player ──
                 var gravBootsPage = playerPage.CreatePage("Gravity Boots", Color.green);
                 gravBootsPage.CreateBool(
@@ -1118,6 +1213,21 @@ namespace BonelabUtilityMod
                     Color.green,
                     RagdollController.KeybindHand,
                     (value) => { RagdollController.KeybindHand = (RagdollHand)value; SettingsManager.MarkDirty(); }
+                );
+
+                // Grab settings sub-page
+                var grabSettingsPage = ragdollPage.CreatePage("Grab Settings", Color.yellow);
+                grabSettingsPage.CreateBool(
+                    "Neck Grab Disables Arms",
+                    Color.red,
+                    RagdollController.NeckGrabDisablesArms,
+                    (value) => { RagdollController.NeckGrabDisablesArms = value; SettingsManager.MarkDirty(); }
+                );
+                grabSettingsPage.CreateBool(
+                    "Arm Grab (2.5x Mass)",
+                    Color.magenta,
+                    RagdollController.ArmGrabEnabled,
+                    (value) => { RagdollController.ArmGrabEnabled = value; SettingsManager.MarkDirty(); }
                 );
 
                 // Fall settings inside Ragdoll
@@ -1267,88 +1377,45 @@ namespace BonelabUtilityMod
                 crazyGunsPage.CreateBool("No Reload", Color.red, ChaosGunController.NoReload,
                     (value) => { ChaosGunController.NoReload = value; SettingsManager.MarkDirty(); });
 
-                // Explosive Punch submenu inside Combat
+                // ============================================
+                // EXPLOSIVE PUNCH
+                // ============================================
                 var punchPage = combatPage.CreatePage("Explosive Punch", Color.magenta);
-                punchPage.CreateEnum(
-                    "Hand Mode",
-                    Color.cyan,
-                    ExplosivePunchController.PunchMode,
-                    (value) => { ExplosivePunchController.PunchMode = (PunchHandMode)value; SettingsManager.MarkDirty(); }
-                );
-                punchPage.CreateFloat(
-                    "Spawn Delay",
-                    Color.cyan,
-                    ExplosivePunchController.SpawnDelay,
-                    0.05f,
-                    0f,
-                    0.5f,
-                    (value) => { ExplosivePunchController.SpawnDelay = value; SettingsManager.MarkDirty(); }
-                );
-                punchPage.CreateFloat(
-                    "Punch Speed",
-                    Color.magenta,
-                    ExplosivePunchController.PunchVelocityThreshold,
-                    1f,
-                    1f,
-                    15f,
-                    (value) => { ExplosivePunchController.PunchVelocityThreshold = value; SettingsManager.MarkDirty(); }
-                );
-                punchPage.CreateFloat(
-                    "Punch Cooldown",
-                    Color.magenta,
-                    ExplosivePunchController.PunchCooldown,
-                    0.05f,
-                    0.05f,
-                    1f,
-                    (value) => { ExplosivePunchController.PunchCooldown = value; SettingsManager.MarkDirty(); }
-                );
-                punchPage.CreateBool(
-                    "Rig Check (Skip World)",
-                    Color.yellow,
-                    ExplosivePunchController.RigCheckOnly,
-                    (value) => { ExplosivePunchController.RigCheckOnly = value; SettingsManager.MarkDirty(); }
-                );
-                punchPage.CreateBool(
-                    "Face Target",
-                    Color.green,
-                    ExplosivePunchController.FaceTarget,
-                    (value) => { ExplosivePunchController.FaceTarget = value; SettingsManager.MarkDirty(); }
-                );
-                punchPage.CreateFloat(
-                    "Spawn Count",
-                    Color.yellow,
-                    ExplosivePunchController.PunchSpawnCount,
-                    1f,
-                    1f,
-                    25f,
-                    (value) => { ExplosivePunchController.PunchSpawnCount = (int)value; SettingsManager.MarkDirty(); }
-                );
-                punchPage.CreateFloat(
-                    "Spawn Spacing",
-                    Color.yellow,
-                    ExplosivePunchController.PunchSpacing,
-                    0.1f,
-                    0.1f,
-                    10f,
-                    (value) => { ExplosivePunchController.PunchSpacing = value; SettingsManager.MarkDirty(); }
-                );
-                punchPage.CreateEnum(
-                    "Matrix Mode",
-                    Color.yellow,
-                    ExplosivePunchController.PunchMatrixMode,
-                    (value) => { ExplosivePunchController.PunchMatrixMode = (MatrixMode)value; SettingsManager.MarkDirty(); }
-                );
 
-                // Legacy Punch toggle (was its own submenu)
-                punchPage.CreateBool(
-                    "Legacy Punch",
-                    Color.green,
-                    ExplosivePunchController.IsLegacyPunchEnabled,
-                    (value) => { ExplosivePunchController.IsLegacyPunchEnabled = value; SettingsManager.MarkDirty(); }
-                );
+                // ── Hand Mode at the top — determines which submenus are relevant ──
+                punchPage.CreateEnum("Hand Mode", Color.cyan, ExplosivePunchController.PunchMode,
+                    (value) => { ExplosivePunchController.PunchMode = (PunchHandMode)value; SettingsManager.MarkDirty(); });
 
-                // ── BOTH HANDS submenu (used when Hand Mode = BOTH) ──
+                // ── Settings (tuning) ──
+                var punchSettingsPage = punchPage.CreatePage("Settings", Color.white);
+                punchSettingsPage.CreateFloat("Punch Speed", Color.magenta, ExplosivePunchController.PunchVelocityThreshold, 1f, 1f, 15f,
+                    (value) => { ExplosivePunchController.PunchVelocityThreshold = value; SettingsManager.MarkDirty(); });
+                punchSettingsPage.CreateFloat("Cooldown", Color.magenta, ExplosivePunchController.PunchCooldown, 0.05f, 0.05f, 1f,
+                    (value) => { ExplosivePunchController.PunchCooldown = value; SettingsManager.MarkDirty(); });
+                punchSettingsPage.CreateFloat("Spawn Delay", Color.cyan, ExplosivePunchController.SpawnDelay, 0.05f, 0f, 0.5f,
+                    (value) => { ExplosivePunchController.SpawnDelay = value; SettingsManager.MarkDirty(); });
+                punchSettingsPage.CreateBool("Rig Check (Skip World)", Color.yellow, ExplosivePunchController.RigCheckOnly,
+                    (value) => { ExplosivePunchController.RigCheckOnly = value; SettingsManager.MarkDirty(); });
+                punchSettingsPage.CreateBool("Face Target", Color.green, ExplosivePunchController.FaceTarget,
+                    (value) => { ExplosivePunchController.FaceTarget = value; SettingsManager.MarkDirty(); });
+                punchSettingsPage.CreateBool("Legacy Punch", Color.green, ExplosivePunchController.IsLegacyPunchEnabled,
+                    (value) => { ExplosivePunchController.IsLegacyPunchEnabled = value; SettingsManager.MarkDirty(); });
+
+                // ── Spawn Matrix ──
+                var punchMatrixPage = punchPage.CreatePage("Spawn Matrix", Color.yellow);
+                punchMatrixPage.CreateFloat("Count", Color.yellow, ExplosivePunchController.PunchSpawnCount, 1f, 1f, 25f,
+                    (value) => { ExplosivePunchController.PunchSpawnCount = (int)value; SettingsManager.MarkDirty(); });
+                punchMatrixPage.CreateFloat("Spacing", Color.yellow, ExplosivePunchController.PunchSpacing, 0.1f, 0.1f, 10f,
+                    (value) => { ExplosivePunchController.PunchSpacing = value; SettingsManager.MarkDirty(); });
+                punchMatrixPage.CreateEnum("Pattern", Color.yellow, ExplosivePunchController.PunchMatrixMode,
+                    (value) => { ExplosivePunchController.PunchMatrixMode = (MatrixMode)value; SettingsManager.MarkDirty(); });
+
+                // ════════════════════════════════════════════
+                // BOTH HANDS (Hand Mode = BOTH)
+                // ════════════════════════════════════════════
                 var bothHandsPage = punchPage.CreatePage("Both Hands", Color.magenta);
+
+                // Explosion type toggles
                 bothHandsPage.CreateBool("Explosive Punch", Color.magenta, ExplosivePunchController.IsExplosivePunchEnabled,
                     (value) => { ExplosivePunchController.IsExplosivePunchEnabled = value; SettingsManager.MarkDirty(); });
                 bothHandsPage.CreateBool("Super Explosive", Color.red, ExplosivePunchController.IsSuperExplosivePunchEnabled,
@@ -1359,13 +1426,8 @@ namespace BonelabUtilityMod
                     (value) => { ExplosivePunchController.IsTinyExplosiveEnabled = value; SettingsManager.MarkDirty(); });
                 bothHandsPage.CreateBool("BOOM", Color.red, ExplosivePunchController.IsBoomEnabled,
                     (value) => { ExplosivePunchController.IsBoomEnabled = value; SettingsManager.MarkDirty(); });
-                bothHandsPage.CreateBool("SmashBone Effect", Color.red, ExplosivePunchController.IsSmashBoneEnabled,
-                    (value) => { ExplosivePunchController.IsSmashBoneEnabled = value; SettingsManager.MarkDirty(); });
-                bothHandsPage.CreateFloat("SmashBone Count", Color.red, ExplosivePunchController.SmashBoneCount, 1f, 1f, 20f,
-                    (value) => { ExplosivePunchController.SmashBoneCount = (int)value; SettingsManager.MarkDirty(); });
-                bothHandsPage.CreateBool("SmashBone Flip", Color.yellow, ExplosivePunchController.SmashBoneFlip,
-                    (value) => { ExplosivePunchController.SmashBoneFlip = value; SettingsManager.MarkDirty(); });
-                // Customizable Punch sub-submenu
+
+                // Custom Punch
                 var customPunchPage = bothHandsPage.CreatePage("Custom Punch", Color.cyan);
                 customPunchPage.CreateBool("Enabled", Color.white, ExplosivePunchController.IsCustomPunchEnabled,
                     (value) => { ExplosivePunchController.IsCustomPunchEnabled = value; SettingsManager.MarkDirty(); });
@@ -1373,13 +1435,10 @@ namespace BonelabUtilityMod
                     (value) => { ExplosivePunchController.CustomPunchBarcode = value; SettingsManager.MarkDirty(); });
                 customPunchPage.CreateFunction("Set From Left Hand", Color.yellow, () => SetCustomPunchFromHand(true));
                 customPunchPage.CreateFunction("Set From Right Hand", Color.yellow, () => SetCustomPunchFromHand(false));
-                // Custom Punch Search submenu
-                var customPunchSearchResults = customPunchPage.CreatePage("+ Search Results", Color.yellow);
-                customPunchPage.CreateEnum("Search Action", Color.cyan,
-                    SpawnableSearcher.CurrentSpawnType,
+                var customPunchSearchResults = customPunchPage.CreatePage("Search Results", Color.yellow);
+                customPunchPage.CreateEnum("Search Action", Color.cyan, SpawnableSearcher.CurrentSpawnType,
                     (value) => SpawnableSearcher.CurrentSpawnType = (SpawnableSearcher.SpawnableSearchType)value);
-                customPunchPage.CreateEnum("Search Method", Color.magenta,
-                    SpawnableSearcher.CurrentSearchMethod,
+                customPunchPage.CreateEnum("Search Method", Color.magenta, SpawnableSearcher.CurrentSearchMethod,
                     (value) => SpawnableSearcher.CurrentSearchMethod = (SpawnableSearcher.SearchMethod)value);
                 customPunchPage.CreateString("Match", Color.white, "",
                     (value) => SpawnableSearcher.SearchQuery = value);
@@ -1390,26 +1449,29 @@ namespace BonelabUtilityMod
                         SettingsManager.MarkDirty();
                         NotificationHelper.Send(NotificationType.Success, $"Custom Punch set: {barcode}");
                     }));
-                customPunchPage.CreateBool("Exclude Ammo/Mags", Color.yellow,
-                    SpawnableSearcher.ExcludeAmmo,
+                customPunchPage.CreateBool("Exclude Ammo/Mags", Color.yellow, SpawnableSearcher.ExcludeAmmo,
                     (value) => SpawnableSearcher.ExcludeAmmo = value);
-                // Cosmetic sub-submenu
-                var bothCosmeticPage = bothHandsPage.CreatePage("Cosmetic Effect", Color.green);
+
+                // SmashBone
+                var bothSmashPage = bothHandsPage.CreatePage("SmashBone", Color.red);
+                bothSmashPage.CreateBool("Enabled", Color.white, ExplosivePunchController.IsSmashBoneEnabled,
+                    (value) => { ExplosivePunchController.IsSmashBoneEnabled = value; SettingsManager.MarkDirty(); });
+                bothSmashPage.CreateFloat("Count", Color.red, ExplosivePunchController.SmashBoneCount, 1f, 1f, 20f,
+                    (value) => { ExplosivePunchController.SmashBoneCount = (int)value; SettingsManager.MarkDirty(); });
+                bothSmashPage.CreateBool("Flip", Color.yellow, ExplosivePunchController.SmashBoneFlip,
+                    (value) => { ExplosivePunchController.SmashBoneFlip = value; SettingsManager.MarkDirty(); });
+
+                // Cosmetic
+                var bothCosmeticPage = bothHandsPage.CreatePage("Cosmetic", Color.green);
                 bothCosmeticPage.CreateBool("Enabled", Color.white, ExplosivePunchController.IsCosmeticEnabled,
                     (value) => { ExplosivePunchController.IsCosmeticEnabled = value; SettingsManager.MarkDirty(); });
                 bothCosmeticPage.CreateString("Barcode", Color.cyan, ExplosivePunchController.CosmeticBarcode,
                     (value) => { ExplosivePunchController.CosmeticBarcode = value; SettingsManager.MarkDirty(); });
                 bothCosmeticPage.CreateFloat("Count", Color.magenta, ExplosivePunchController.CosmeticCount, 1f, 1f, 20f,
                     (value) => { ExplosivePunchController.CosmeticCount = (int)value; SettingsManager.MarkDirty(); });
-                bothCosmeticPage.CreateBool("Flip Effect", Color.yellow, ExplosivePunchController.CosmeticFlip,
+                bothCosmeticPage.CreateBool("Flip", Color.yellow, ExplosivePunchController.CosmeticFlip,
                     (value) => { ExplosivePunchController.CosmeticFlip = value; SettingsManager.MarkDirty(); });
-                bothCosmeticPage.CreateFloat("Matrix Count", Color.magenta, ExplosivePunchController.PunchSpawnCount, 1f, 1f, 25f,
-                    (value) => { ExplosivePunchController.PunchSpawnCount = (int)value; SettingsManager.MarkDirty(); });
-                bothCosmeticPage.CreateFloat("Matrix Spacing", Color.magenta, ExplosivePunchController.PunchSpacing, 0.1f, 0.1f, 10f,
-                    (value) => { ExplosivePunchController.PunchSpacing = value; SettingsManager.MarkDirty(); });
-                bothCosmeticPage.CreateEnum("Matrix Mode", Color.magenta, ExplosivePunchController.PunchMatrixMode,
-                    (value) => { ExplosivePunchController.PunchMatrixMode = (MatrixMode)value; SettingsManager.MarkDirty(); });
-                var bothCosSearchResults = bothCosmeticPage.CreatePage("+ Search", Color.yellow);
+                var bothCosSearchResults = bothCosmeticPage.CreatePage("Search", Color.yellow);
                 bothCosmeticPage.CreateEnum("Search Method", Color.magenta, SpawnableSearcher.CurrentSearchMethod,
                     (value) => SpawnableSearcher.CurrentSearchMethod = (SpawnableSearcher.SearchMethod)value);
                 bothCosmeticPage.CreateString("Search Query", Color.white, "",
@@ -1422,34 +1484,35 @@ namespace BonelabUtilityMod
                         NotificationHelper.Send(NotificationType.Success, $"Cosmetic set: {barcode}");
                     }));
 
-                // ── LEFT HAND submenu (used when Hand Mode = SEPARATE) ──
+                // ════════════════════════════════════════════
+                // LEFT HAND (Hand Mode = SEPARATE)
+                // ════════════════════════════════════════════
                 var leftHandPage = punchPage.CreatePage("Left Hand", Color.blue);
                 leftHandPage.CreateEnum("Explosion Type", Color.magenta, ExplosivePunchController.LeftExplosionType,
                     (value) => { ExplosivePunchController.LeftExplosionType = (ExplosionType)value; SettingsManager.MarkDirty(); });
                 leftHandPage.CreateString("Custom Barcode", Color.cyan, ExplosivePunchController.LeftCustomBarcode,
                     (value) => { ExplosivePunchController.LeftCustomBarcode = value; SettingsManager.MarkDirty(); });
-                leftHandPage.CreateBool("SmashBone", Color.red, ExplosivePunchController.LeftSmashBoneEnabled,
+
+                // Left SmashBone
+                var leftSmashPage = leftHandPage.CreatePage("SmashBone", Color.red);
+                leftSmashPage.CreateBool("Enabled", Color.white, ExplosivePunchController.LeftSmashBoneEnabled,
                     (value) => { ExplosivePunchController.LeftSmashBoneEnabled = value; SettingsManager.MarkDirty(); });
-                leftHandPage.CreateFloat("SmashBone Count", Color.red, ExplosivePunchController.LeftSmashBoneCount, 1f, 1f, 20f,
+                leftSmashPage.CreateFloat("Count", Color.red, ExplosivePunchController.LeftSmashBoneCount, 1f, 1f, 20f,
                     (value) => { ExplosivePunchController.LeftSmashBoneCount = (int)value; SettingsManager.MarkDirty(); });
-                leftHandPage.CreateBool("SmashBone Flip", Color.yellow, ExplosivePunchController.LeftSmashBoneFlip,
+                leftSmashPage.CreateBool("Flip", Color.yellow, ExplosivePunchController.LeftSmashBoneFlip,
                     (value) => { ExplosivePunchController.LeftSmashBoneFlip = value; SettingsManager.MarkDirty(); });
-                var leftCosmeticPage = leftHandPage.CreatePage("Cosmetic Effect", Color.green);
+
+                // Left Cosmetic
+                var leftCosmeticPage = leftHandPage.CreatePage("Cosmetic", Color.green);
                 leftCosmeticPage.CreateBool("Enabled", Color.white, ExplosivePunchController.LeftCosmeticEnabled,
                     (value) => { ExplosivePunchController.LeftCosmeticEnabled = value; SettingsManager.MarkDirty(); });
                 leftCosmeticPage.CreateString("Barcode", Color.cyan, ExplosivePunchController.LeftCosmeticBarcode,
                     (value) => { ExplosivePunchController.LeftCosmeticBarcode = value; SettingsManager.MarkDirty(); });
                 leftCosmeticPage.CreateFloat("Count", Color.magenta, ExplosivePunchController.LeftCosmeticCount, 1f, 1f, 20f,
                     (value) => { ExplosivePunchController.LeftCosmeticCount = (int)value; SettingsManager.MarkDirty(); });
-                leftCosmeticPage.CreateBool("Flip Effect", Color.yellow, ExplosivePunchController.LeftCosmeticFlip,
+                leftCosmeticPage.CreateBool("Flip", Color.yellow, ExplosivePunchController.LeftCosmeticFlip,
                     (value) => { ExplosivePunchController.LeftCosmeticFlip = value; SettingsManager.MarkDirty(); });
-                leftCosmeticPage.CreateFloat("Matrix Count", Color.cyan, ExplosivePunchController.PunchSpawnCount, 1f, 1f, 25f,
-                    (value) => { ExplosivePunchController.PunchSpawnCount = (int)value; SettingsManager.MarkDirty(); });
-                leftCosmeticPage.CreateFloat("Matrix Spacing", Color.cyan, ExplosivePunchController.PunchSpacing, 0.1f, 0.1f, 10f,
-                    (value) => { ExplosivePunchController.PunchSpacing = value; SettingsManager.MarkDirty(); });
-                leftCosmeticPage.CreateEnum("Matrix Mode", Color.cyan, ExplosivePunchController.PunchMatrixMode,
-                    (value) => { ExplosivePunchController.PunchMatrixMode = (MatrixMode)value; SettingsManager.MarkDirty(); });
-                var leftCosSearchResults = leftCosmeticPage.CreatePage("+ Search", Color.yellow);
+                var leftCosSearchResults = leftCosmeticPage.CreatePage("Search", Color.yellow);
                 leftCosmeticPage.CreateEnum("Search Method", Color.magenta, SpawnableSearcher.CurrentSearchMethod,
                     (value) => SpawnableSearcher.CurrentSearchMethod = (SpawnableSearcher.SearchMethod)value);
                 leftCosmeticPage.CreateString("Search Query", Color.white, "",
@@ -1462,34 +1525,35 @@ namespace BonelabUtilityMod
                         NotificationHelper.Send(NotificationType.Success, $"Left cosmetic set: {barcode}");
                     }));
 
-                // ── RIGHT HAND submenu (used when Hand Mode = SEPARATE) ──
+                // ════════════════════════════════════════════
+                // RIGHT HAND (Hand Mode = SEPARATE)
+                // ════════════════════════════════════════════
                 var rightHandPage = punchPage.CreatePage("Right Hand", Color.red);
                 rightHandPage.CreateEnum("Explosion Type", Color.magenta, ExplosivePunchController.RightExplosionType,
                     (value) => { ExplosivePunchController.RightExplosionType = (ExplosionType)value; SettingsManager.MarkDirty(); });
                 rightHandPage.CreateString("Custom Barcode", Color.cyan, ExplosivePunchController.RightCustomBarcode,
                     (value) => { ExplosivePunchController.RightCustomBarcode = value; SettingsManager.MarkDirty(); });
-                rightHandPage.CreateBool("SmashBone", Color.red, ExplosivePunchController.RightSmashBoneEnabled,
+
+                // Right SmashBone
+                var rightSmashPage = rightHandPage.CreatePage("SmashBone", Color.red);
+                rightSmashPage.CreateBool("Enabled", Color.white, ExplosivePunchController.RightSmashBoneEnabled,
                     (value) => { ExplosivePunchController.RightSmashBoneEnabled = value; SettingsManager.MarkDirty(); });
-                rightHandPage.CreateFloat("SmashBone Count", Color.red, ExplosivePunchController.RightSmashBoneCount, 1f, 1f, 20f,
+                rightSmashPage.CreateFloat("Count", Color.red, ExplosivePunchController.RightSmashBoneCount, 1f, 1f, 20f,
                     (value) => { ExplosivePunchController.RightSmashBoneCount = (int)value; SettingsManager.MarkDirty(); });
-                rightHandPage.CreateBool("SmashBone Flip", Color.yellow, ExplosivePunchController.RightSmashBoneFlip,
+                rightSmashPage.CreateBool("Flip", Color.yellow, ExplosivePunchController.RightSmashBoneFlip,
                     (value) => { ExplosivePunchController.RightSmashBoneFlip = value; SettingsManager.MarkDirty(); });
-                var rightCosmeticPage = rightHandPage.CreatePage("Cosmetic Effect", Color.green);
+
+                // Right Cosmetic
+                var rightCosmeticPage = rightHandPage.CreatePage("Cosmetic", Color.green);
                 rightCosmeticPage.CreateBool("Enabled", Color.white, ExplosivePunchController.RightCosmeticEnabled,
                     (value) => { ExplosivePunchController.RightCosmeticEnabled = value; SettingsManager.MarkDirty(); });
                 rightCosmeticPage.CreateString("Barcode", Color.cyan, ExplosivePunchController.RightCosmeticBarcode,
                     (value) => { ExplosivePunchController.RightCosmeticBarcode = value; SettingsManager.MarkDirty(); });
                 rightCosmeticPage.CreateFloat("Count", Color.magenta, ExplosivePunchController.RightCosmeticCount, 1f, 1f, 20f,
                     (value) => { ExplosivePunchController.RightCosmeticCount = (int)value; SettingsManager.MarkDirty(); });
-                rightCosmeticPage.CreateBool("Flip Effect", Color.yellow, ExplosivePunchController.RightCosmeticFlip,
+                rightCosmeticPage.CreateBool("Flip", Color.yellow, ExplosivePunchController.RightCosmeticFlip,
                     (value) => { ExplosivePunchController.RightCosmeticFlip = value; SettingsManager.MarkDirty(); });
-                rightCosmeticPage.CreateFloat("Matrix Count", Color.cyan, ExplosivePunchController.PunchSpawnCount, 1f, 1f, 25f,
-                    (value) => { ExplosivePunchController.PunchSpawnCount = (int)value; SettingsManager.MarkDirty(); });
-                rightCosmeticPage.CreateFloat("Matrix Spacing", Color.cyan, ExplosivePunchController.PunchSpacing, 0.1f, 0.1f, 10f,
-                    (value) => { ExplosivePunchController.PunchSpacing = value; SettingsManager.MarkDirty(); });
-                rightCosmeticPage.CreateEnum("Matrix Mode", Color.cyan, ExplosivePunchController.PunchMatrixMode,
-                    (value) => { ExplosivePunchController.PunchMatrixMode = (MatrixMode)value; SettingsManager.MarkDirty(); });
-                var rightCosSearchResults = rightCosmeticPage.CreatePage("+ Search", Color.yellow);
+                var rightCosSearchResults = rightCosmeticPage.CreatePage("Search", Color.yellow);
                 rightCosmeticPage.CreateEnum("Search Method", Color.magenta, SpawnableSearcher.CurrentSearchMethod,
                     (value) => SpawnableSearcher.CurrentSearchMethod = (SpawnableSearcher.SearchMethod)value);
                 rightCosmeticPage.CreateString("Search Query", Color.white, "",

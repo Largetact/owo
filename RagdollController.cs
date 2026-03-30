@@ -53,6 +53,8 @@ namespace BonelabUtilityMod
 
         // ───── Grab Detection ─────
         private static bool _grabEnabled = true;
+        private static bool _neckGrabDisablesArms = true; // Auto-switch to LIMP on neck grab
+        private static bool _armGrabEnabled = true; // Single arm grab with 2.5x mass diff triggers ragdoll
 
         // ───── VR Controller Keybind ─────
         private static RagdollBinding _binding = RagdollBinding.NONE;
@@ -97,6 +99,10 @@ namespace BonelabUtilityMod
         private static float _grabTransitionCooldownUntil = 0f;
         private const float GRAB_TRANSITION_COOLDOWN = 1.5f;
 
+        // Saved head rotation before ragdoll so we can restore it on un-ragdoll
+        private static Quaternion _savedHeadLocalRotation = Quaternion.identity;
+        private static bool _hasHeadRotationSaved = false;
+
         // Cache for arm grip scanning
         private static Grip[] _cachedRigGrips = null;
         private static float _lastGripCacheTime = 0f;
@@ -114,6 +120,8 @@ namespace BonelabUtilityMod
         }
 
         public static bool GrabEnabled { get => _grabEnabled; set => _grabEnabled = value; }
+        public static bool NeckGrabDisablesArms { get => _neckGrabDisablesArms; set => _neckGrabDisablesArms = value; }
+        public static bool ArmGrabEnabled { get => _armGrabEnabled; set => _armGrabEnabled = value; }
 
         public static bool FallEnabled { get => _fallEnabled; set => _fallEnabled = value; }
         public static float FallVelocityThreshold
@@ -171,7 +179,7 @@ namespace BonelabUtilityMod
             set
             {
                 _tantrumMode = value;
-                Main.MelonLog.Msg($"Tantrum Mode: {(value ? "ON (basic ragdoll)" : "OFF (LIMP/ARM_CONTROL)")}");
+                Main.MelonLog.Msg($"Tantrum Mode: {(value ? "ON (flailing ragdoll)" : "OFF")}");
             }
         }
 
@@ -280,9 +288,8 @@ namespace BonelabUtilityMod
                 var rigManager = Player.RigManager;
                 if (rigManager == null) return;
 
-                // === VR Controller Keybind (works regardless of cooldowns) ===
-                if (rigManager.activeSeat == null &&
-                    !UIRig.Instance.popUpMenu.m_IsCursorShown &&
+                // === VR Controller Keybind (works regardless of cooldowns, including in vehicles) ===
+                if (!UIRig.Instance.popUpMenu.m_IsCursorShown &&
                     CheckKeybindInput())
                 {
                     if (!physRig.torso.shutdown && physRig.ballLocoEnabled)
@@ -303,6 +310,13 @@ namespace BonelabUtilityMod
 
                 // Detect grab/release transitions to suppress physics triggers
                 UpdateGrabTransitionCooldown(physRig);
+
+                // Check if already ragdolled in ARM_CONTROL — neck grab can force LIMP live
+                if (_neckGrabDisablesArms && _grabEnabled && _mode == RagdollMode.ARM_CONTROL &&
+                    (!physRig.ballLocoEnabled || physRig.torso.shutdown))
+                {
+                    CheckNeckGrabForceLimp(rigManager, physRig);
+                }
 
                 // Don't process if already ragdolled or shut down
                 if (physRig.torso.shutdown || !physRig.ballLocoEnabled)
@@ -423,10 +437,38 @@ namespace BonelabUtilityMod
         // ═══════════════════════════════════════════════════
 
         /// <summary>
+        /// While already ragdolled in ARM_CONTROL, check if neck is grabbed
+        /// and force switch to LIMP (disable arm control live).
+        /// </summary>
+        private static void CheckNeckGrabForceLimp(RigManager rigManager, PhysicsRig physRig)
+        {
+            try
+            {
+                var torso = physRig.torso;
+                if (torso == null) return;
+
+                float myMass = GetRigMass(rigManager);
+                var neckGrabber = GetExternalGrabber(torso.gNeck, rigManager);
+
+                if (neckGrabber != null)
+                {
+                    float grabberMass = GetRigMass(neckGrabber);
+                    if (grabberMass > myMass * 0.9f)
+                    {
+                        // Force full LIMP — shutdown the whole rig
+                        ForceRagdollLimp(physRig, "Neck Grab while ARM_CONTROL");
+                    }
+                }
+            }
+            catch { }
+        }
+
+        /// <summary>
         /// Detect grab-based ragdoll scenarios:
-        ///   1. Head or neck grabbed by someone bigger
-        ///   2. Both arms grabbed separately by someone equal/bigger
-        ///   3. Body grabbed with both hands by someone significantly stronger
+        ///   1. Head or neck grabbed by someone bigger (neck grab can force LIMP)
+        ///   2. Single arm grabbed by someone with 2.5x+ mass difference
+        ///   3. Both arms grabbed separately by someone equal/bigger
+        ///   4. Body grabbed with both hands by someone significantly stronger
         /// </summary>
         private static void CheckGrabRagdoll(RigManager rigManager, PhysicsRig physRig)
         {
@@ -456,12 +498,20 @@ namespace BonelabUtilityMod
                     float grabberMass = GetRigMass(neckGrabber);
                     if (grabberMass > myMass * 0.9f)
                     {
-                        TriggerRagdoll(rigManager, "Neck Grab", false);
+                        // If neck grab disables arms is on, force LIMP regardless of current mode
+                        if (_neckGrabDisablesArms && _mode == RagdollMode.ARM_CONTROL)
+                        {
+                            ForceRagdollLimp(physRig, "Neck Grab (arms disabled)");
+                        }
+                        else
+                        {
+                            TriggerRagdoll(rigManager, "Neck Grab", false);
+                        }
                         return;
                     }
                 }
 
-                // --- 2. Both arms grabbed separately by someone equal/bigger ---
+                // --- 2. Arm grabs ---
                 // Scan all grips on our rig to find arm grips with external hands
                 RefreshGripCache(rigManager);
 
@@ -540,6 +590,29 @@ namespace BonelabUtilityMod
                     {
                         TriggerRagdoll(rigManager, "Both Arms Grabbed", false);
                         return;
+                    }
+                }
+
+                // --- 2b. Single arm grabbed by someone with 2.5x+ mass difference ---
+                if (_armGrabEnabled)
+                {
+                    if (leftArmGrabber != null)
+                    {
+                        float grabberMass = GetRigMass(leftArmGrabber);
+                        if (grabberMass >= myMass * 2.5f)
+                        {
+                            TriggerRagdoll(rigManager, "Left Arm Grabbed (Much Bigger)", false);
+                            return;
+                        }
+                    }
+                    if (rightArmGrabber != null)
+                    {
+                        float grabberMass = GetRigMass(rightArmGrabber);
+                        if (grabberMass >= myMass * 2.5f)
+                        {
+                            TriggerRagdoll(rigManager, "Right Arm Grabbed (Much Bigger)", false);
+                            return;
+                        }
                     }
                 }
 
@@ -847,6 +920,21 @@ namespace BonelabUtilityMod
                 var physRig = rig.physicsRig;
                 if (physRig == null) return;
 
+                // Save head rotation BEFORE ragdolling so we can restore it on un-ragdoll.
+                // During ragdoll, the head rb rotates freely with physics and drifts
+                // from its neutral orientation. Without saving/restoring, the head
+                // ends up tilted after un-ragdoll, which breaks dash aiming.
+                try
+                {
+                    var headRb = physRig.torso?.rbHead;
+                    if (headRb != null)
+                    {
+                        _savedHeadLocalRotation = ((Component)headRb).transform.localRotation;
+                        _hasHeadRotationSaved = true;
+                    }
+                }
+                catch { }
+
                 ApplyRagdollMode(physRig);
 
                 if (dropItems)
@@ -866,26 +954,28 @@ namespace BonelabUtilityMod
 
         /// <summary>
         /// Apply the ragdoll mode.
-        /// Always calls RagdollRig() first (same as tantrum — proven to work).
-        /// ARM_CONTROL then disables ball-loco, activates physical legs, and shuts down leg limbs
-        /// so arms still follow VR controllers while legs go limp.
-        /// LIMP additionally shuts down the full rig so there's no auto-recovery.
+        /// Tantrum mode now respects the selected mode (LIMP vs ARM_CONTROL).
+        /// ARM_CONTROL: legs go limp, arms follow VR controllers, head tracks for look-around.
+        /// LIMP: full shutdown, no auto-recovery.
         /// </summary>
         private static void ApplyRagdollMode(PhysicsRig physRig)
         {
-            if (_tantrumMode)
+            // Both modes and tantrum start with RagdollRig (proven reliable)
+            physRig.RagdollRig();
+
+            if (_tantrumMode && _mode == RagdollMode.LIMP)
             {
-                physRig.RagdollRig();
+                // Tantrum + LIMP: just RagdollRig (basic tantrum behavior) 
+                // plus full shutdown so no auto-recovery
+                physRig.ShutdownRig();
                 return;
             }
-
-            // Both modes start with RagdollRig (proven reliable)
-            physRig.RagdollRig();
 
             if (_mode == RagdollMode.ARM_CONTROL)
             {
                 // Disable locomotion and switch to physical legs —
-                // arms still follow VR controllers via IK tracking
+                // arms still follow VR controllers via IK tracking,
+                // head still tracks via VR headset naturally
                 physRig.DisableBallLoco();
                 physRig.PhysicalLegs();
                 physRig.legLf.ShutdownLimb();
@@ -895,6 +985,25 @@ namespace BonelabUtilityMod
             {
                 // LIMP: full shutdown on top of ragdoll to prevent auto-recovery
                 physRig.ShutdownRig();
+            }
+        }
+
+        /// <summary>
+        /// Force the player into LIMP mode ragdoll, overriding ARM_CONTROL.
+        /// Used when grabbed by the neck to disable arm control.
+        /// </summary>
+        private static void ForceRagdollLimp(PhysicsRig physRig, string reason)
+        {
+            try
+            {
+                physRig.RagdollRig();
+                physRig.ShutdownRig();
+                _nextRagdollTime = Time.time + COOLDOWN;
+                Main.MelonLog.Msg($"Forced LIMP ragdoll: {reason}");
+            }
+            catch (Exception ex)
+            {
+                Main.MelonLog.Warning($"ForceRagdollLimp error: {ex.Message}");
             }
         }
 
@@ -932,6 +1041,33 @@ namespace BonelabUtilityMod
             var rot = pelvisTransform.rotation;
             physRig.knee.transform.SetPositionAndRotation(pos, rot);
             physRig.feet.transform.SetPositionAndRotation(pos, rot);
+
+            // Ensure head joint is fully restored to Locked so head tracks VR headset cleanly
+            try
+            {
+                var torso = physRig.torso;
+                if (torso != null && torso.rbHead != null)
+                {
+                    // Restore the head's pre-ragdoll local rotation.
+                    // During ragdoll the head rb rotates freely with physics and
+                    // ends up tilted. Locking the joint without resetting rotation
+                    // locks it at the drifted angle, causing dash to aim downward.
+                    if (_hasHeadRotationSaved)
+                    {
+                        ((Component)torso.rbHead).transform.localRotation = _savedHeadLocalRotation;
+                        _hasHeadRotationSaved = false;
+                    }
+
+                    var headJoint = torso.rbHead.GetComponent<ConfigurableJoint>();
+                    if (headJoint != null)
+                    {
+                        headJoint.angularXMotion = ConfigurableJointMotion.Locked;
+                        headJoint.angularYMotion = ConfigurableJointMotion.Locked;
+                        headJoint.angularZMotion = ConfigurableJointMotion.Locked;
+                    }
+                }
+            }
+            catch { }
         }
 
         // ═══════════════════════════════════════════════════

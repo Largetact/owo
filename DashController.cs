@@ -357,10 +357,13 @@ namespace BonelabUtilityMod
                 }
                 else
                 {
-                    // Default: use head forward
-                    var head = Player.Head;
-                    if (head == null) return;
-                    dashDirection = head.forward.normalized;
+                    // Default: use the main camera's forward direction.
+                    // Camera.main is on the OpenControllerRig and always reflects
+                    // where the player is actually looking — immune to physics
+                    // head drift from ragdoll (unlike Player.Head which is physical).
+                    var cam = Camera.main;
+                    if (cam == null) return;
+                    dashDirection = cam.transform.forward.normalized;
                 }
 
                 // Find rigidbodies to apply force to

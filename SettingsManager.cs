@@ -192,7 +192,7 @@ namespace BonelabUtilityMod
                 "ExplosiveImpact", "DespawnAll", "ObjectLauncher", "ForceGrab",
                 "WaypointProjectile", "DropOnPlayer", "ServerQueue",
                 "BodyLogColor", "ScreenShare", "Keybinds", "CosmeticPresets", "Favorites",
-                "AutoRun", "DefaultWorld", "AutoHost", "XYZScale", "DisableAvatarFX", "HolsterHider"
+                "AutoRun", "Spinbot", "BunnyHop", "DefaultWorld", "AutoHost", "XYZScale", "DisableAvatarFX", "HolsterHider"
             };
 
             var written = new HashSet<string>(StringComparer.Ordinal);
@@ -449,6 +449,8 @@ namespace BonelabUtilityMod
             {
                 RagdollController.Enabled = GetBool("Ragdoll", "Enabled", false);
                 RagdollController.GrabEnabled = GetBool("Ragdoll", "GrabEnabled", true);
+                RagdollController.NeckGrabDisablesArms = GetBool("Ragdoll", "NeckGrabDisablesArms", true);
+                RagdollController.ArmGrabEnabled = GetBool("Ragdoll", "ArmGrabEnabled", true);
                 RagdollController.Mode = (RagdollMode)GetInt("Ragdoll", "Mode", (int)RagdollMode.LIMP);
                 RagdollController.TantrumMode = GetBool("Ragdoll", "TantrumMode", false);
                 RagdollController.Binding = (RagdollBinding)GetInt("Ragdoll", "Binding", (int)RagdollBinding.NONE);
@@ -787,6 +789,25 @@ namespace BonelabUtilityMod
 
             SafeExecute(() =>
             {
+                SpinbotController.Enabled = GetBool("Spinbot", "Enabled", false);
+                SpinbotController.Speed = GetFloat("Spinbot", "Speed", 720f);
+                SpinbotController.Direction = (SpinDirection)GetInt("Spinbot", "Direction", (int)SpinDirection.RIGHT);
+            }, "Load Spinbot");
+
+            SafeExecute(() =>
+            {
+                BunnyHopController.Enabled = GetBool("BunnyHop", "Enabled", false);
+                BunnyHopController.HopBoost = GetFloat("BunnyHop", "HopBoost", 1.5f);
+                BunnyHopController.MaxSpeed = GetFloat("BunnyHop", "MaxSpeed", 50f);
+                BunnyHopController.AirStrafeForce = GetFloat("BunnyHop", "AirStrafeForce", 12f);
+                BunnyHopController.JumpForce = GetFloat("BunnyHop", "JumpForce", 5.5f);
+                BunnyHopController.AutoHop = GetBool("BunnyHop", "AutoHop", true);
+                BunnyHopController.StrafeMode = (AirStrafeMode)GetInt("BunnyHop", "StrafeMode", (int)AirStrafeMode.EASY);
+                BunnyHopController.StandableNormal = GetFloat("BunnyHop", "StandableNormal", 0.7f);
+            }, "Load BunnyHop");
+
+            SafeExecute(() =>
+            {
                 DefaultWorldController.Enabled = GetBool("DefaultWorld", "Enabled", false);
                 DefaultWorldController.Barcode = GetValue("DefaultWorld", "Barcode", "");
                 DefaultWorldController.LevelName = GetValue("DefaultWorld", "LevelName", "");
@@ -970,6 +991,8 @@ namespace BonelabUtilityMod
             {
                 SetBool("Ragdoll", "Enabled", RagdollController.Enabled);
                 SetBool("Ragdoll", "GrabEnabled", RagdollController.GrabEnabled);
+                SetBool("Ragdoll", "NeckGrabDisablesArms", RagdollController.NeckGrabDisablesArms);
+                SetBool("Ragdoll", "ArmGrabEnabled", RagdollController.ArmGrabEnabled);
                 SetInt("Ragdoll", "Mode", (int)RagdollController.Mode);
                 SetBool("Ragdoll", "TantrumMode", RagdollController.TantrumMode);
                 SetInt("Ragdoll", "Binding", (int)RagdollController.Binding);
@@ -1297,6 +1320,25 @@ namespace BonelabUtilityMod
             {
                 SetBool("AutoRun", "Enabled", AutoRunController.Enabled);
             }, "Save Auto Run");
+
+            SafeExecute(() =>
+            {
+                SetBool("Spinbot", "Enabled", SpinbotController.Enabled);
+                SetFloat("Spinbot", "Speed", SpinbotController.Speed);
+                SetInt("Spinbot", "Direction", (int)SpinbotController.Direction);
+            }, "Save Spinbot");
+
+            SafeExecute(() =>
+            {
+                SetBool("BunnyHop", "Enabled", BunnyHopController.Enabled);
+                SetFloat("BunnyHop", "HopBoost", BunnyHopController.HopBoost);
+                SetFloat("BunnyHop", "MaxSpeed", BunnyHopController.MaxSpeed);
+                SetFloat("BunnyHop", "AirStrafeForce", BunnyHopController.AirStrafeForce);
+                SetFloat("BunnyHop", "JumpForce", BunnyHopController.JumpForce);
+                SetBool("BunnyHop", "AutoHop", BunnyHopController.AutoHop);
+                SetInt("BunnyHop", "StrafeMode", (int)BunnyHopController.StrafeMode);
+                SetFloat("BunnyHop", "StandableNormal", BunnyHopController.StandableNormal);
+            }, "Save BunnyHop");
 
             SafeExecute(() =>
             {

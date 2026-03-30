@@ -7,7 +7,7 @@
     <RootNamespace>BonelabUtilityMod</RootNamespace>
     <LangVersion>latest</LangVersion>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <Version>4.1.0</Version>
+    <Version>4.2.6</Version>
   </PropertyGroup>
 
   <!-- MelonLoader and BoneLib References -->
@@ -68,6 +68,8 @@
 
   <ItemGroup>
     <Compile Remove="Decompiled Stuff\\**\\*.cs" />
+    <Compile Remove="Decompiled FlatPlayer\\**\\*.cs" />
+    <Compile Remove="Decompiled LabFusion114\\**\\*.cs" />
     <Compile Remove="DEPRECATED\\**\\*.cs" />
     <Compile Remove="decompiled_LabFusion\\**\\*.cs" />
     <Compile Remove="decompiled_Teleportation\\**\\*.cs" />
@@ -83,6 +85,7 @@
     <Compile Remove="StandaloneObjectLauncher\\**\\*.cs" />
     <Compile Remove="BonelabUtilityUpdater\\**\\*.cs" />
     <Compile Remove="StandaloneServerQueue\\**\\*.cs" />
+    <Compile Remove="Decompiled Obfuscated\\**\\*.cs" />
   </ItemGroup>
 
 </Project>
