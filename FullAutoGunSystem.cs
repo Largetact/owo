@@ -21,13 +21,14 @@ namespace BonelabUtilityMod
 
         // Settings
         public static bool Enabled = false;
-        public static float FireRate = 600f; // Rounds per minute (RPM)
+        public static float FireRateMultiplier = 1f; // Multiplier applied to original RPM
 
         // Track original gun settings to restore them
         private class GunState
         {
             public int OriginalFireMode;
             public float OriginalRPM;
+            public float OriginalRPS;
             public bool WasModified;
         }
         private static Dictionary<int, GunState> _gunStates = new Dictionary<int, GunState>();
@@ -50,14 +51,14 @@ namespace BonelabUtilityMod
             SendNotification(
                 enabled ? NotificationType.Success : NotificationType.Information,
                 "Full Auto",
-                enabled ? $"Guns set to full auto at {FireRate} RPM!" : "Full auto disabled, guns restored"
+                enabled ? $"Guns set to full auto at {FireRateMultiplier}x speed!" : "Full auto disabled, guns restored"
             );
             Main.MelonLog.Msg($"Full Auto {(enabled ? "ENABLED" : "DISABLED")}");
         }
 
-        public static void SetFireRate(float rpm)
+        public static void SetFireRateMultiplier(float mult)
         {
-            FireRate = Mathf.Clamp(rpm, 60f, 2000f);
+            FireRateMultiplier = Mathf.Clamp(mult, 1f, 1000f);
 
             // Update any guns currently modified
             if (Enabled)
@@ -65,7 +66,7 @@ namespace BonelabUtilityMod
                 UpdateAllGunRPM();
             }
 
-            Main.MelonLog.Msg($"Fire rate set to {FireRate} RPM");
+            Main.MelonLog.Msg($"Fire rate multiplier set to {FireRateMultiplier}x");
         }
 
         /// <summary>
@@ -113,13 +114,17 @@ namespace BonelabUtilityMod
                     {
                         OriginalFireMode = (int)gun.fireMode,
                         OriginalRPM = gun.roundsPerMinute,
+                        OriginalRPS = gun.roundsPerSecond,
                         WasModified = true
                     };
                     _gunStates[gunId] = state;
                 }
 
-                // Set to automatic fire mode
+                // Set to automatic fire mode and apply multiplier
                 gun.fireMode = (Gun.FireMode)FIREMODE_AUTOMATIC;
+                var saved = _gunStates[gunId];
+                gun.roundsPerMinute = saved.OriginalRPM * FireRateMultiplier;
+                gun.roundsPerSecond = saved.OriginalRPS * FireRateMultiplier;
             }
             catch
             {
@@ -150,16 +155,16 @@ namespace BonelabUtilityMod
                 var leftGun = Player.GetComponentInHand<Gun>(Player.LeftHand);
                 var rightGun = Player.GetComponentInHand<Gun>(Player.RightHand);
 
-                if (leftGun != null && _gunStates.ContainsKey(leftGun.GetInstanceID()))
+                if (leftGun != null && _gunStates.TryGetValue(leftGun.GetInstanceID(), out var leftState))
                 {
-                    leftGun.roundsPerMinute = FireRate;
-                    leftGun.roundsPerSecond = FireRate / 60f;
+                    leftGun.roundsPerMinute = leftState.OriginalRPM * FireRateMultiplier;
+                    leftGun.roundsPerSecond = leftState.OriginalRPS * FireRateMultiplier;
                 }
 
-                if (rightGun != null && _gunStates.ContainsKey(rightGun.GetInstanceID()))
+                if (rightGun != null && _gunStates.TryGetValue(rightGun.GetInstanceID(), out var rightState))
                 {
-                    rightGun.roundsPerMinute = FireRate;
-                    rightGun.roundsPerSecond = FireRate / 60f;
+                    rightGun.roundsPerMinute = rightState.OriginalRPM * FireRateMultiplier;
+                    rightGun.roundsPerSecond = rightState.OriginalRPS * FireRateMultiplier;
                 }
             }
             catch { }

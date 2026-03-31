@@ -9,7 +9,7 @@ namespace BonelabUtilityMod
     public static class FullAutoController
     {
         private static bool fullAutoEnabled = false;
-        private static float fireRate = 600f; // Rounds per minute
+        private static float _fireRateMultiplier = 1f;
 
         public static bool IsFullAutoEnabled
         {
@@ -24,14 +24,21 @@ namespace BonelabUtilityMod
             }
         }
 
-        public static float FireRate
+        public static float FireRateMultiplier
         {
-            get => fireRate;
+            get => _fireRateMultiplier;
             set
             {
-                fireRate = Mathf.Clamp(value, 60f, 2000f);
-                FullAutoGunSystem.SetFireRate(fireRate);
+                _fireRateMultiplier = Mathf.Clamp(value, 1f, 1000f);
+                FullAutoGunSystem.FireRateMultiplier = _fireRateMultiplier;
             }
+        }
+
+        // Legacy accessor for settings compatibility
+        public static float FireRate
+        {
+            get => _fireRateMultiplier;
+            set => FireRateMultiplier = value;
         }
 
         public static void Initialize()

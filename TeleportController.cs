@@ -2,6 +2,7 @@ using MelonLoader;
 using UnityEngine;
 using BoneLib;
 using BoneLib.Notifications;
+using LabFusion.Network;
 using System;
 using System.Collections.Generic;
 using System.Reflection;
@@ -777,10 +778,36 @@ namespace BonelabUtilityMod
 
                 // Teleport target player to 1.5m in front of us
                 Vector3 spawnPos = myPos + myForward * 1.5f;
+
+                // Local: move their rig on our screen immediately
                 targetRigManager.Teleport(spawnPos, -myForward);
 
-                Main.MelonLog.Msg($"Teleported {targetPlayer.DisplayName} to us");
-                SendNotification("Teleported", $"{targetPlayer.DisplayName} → You");
+                // Network: send teleport message so it actually moves them (host only)
+                bool isHost = false;
+                try { isHost = NetworkInfo.IsHost; } catch { }
+                string hostNote = "";
+                if (isHost)
+                {
+                    try
+                    {
+                        MessageRelay.RelayNative(
+                            new PlayerRepTeleportData { Position = spawnPos },
+                            NativeMessageTag.PlayerRepTeleport,
+                            new MessageRoute(targetPlayer.SmallID, NetworkChannel.Reliable));
+                    }
+                    catch (Exception relayEx)
+                    {
+                        Main.MelonLog.Warning($"TP here relay failed: {relayEx.Message}");
+                    }
+                    hostNote = " [net-synced]";
+                }
+                else
+                {
+                    hostNote = " [local only - need host]";
+                }
+
+                Main.MelonLog.Msg($"Teleported {targetPlayer.DisplayName} to us{hostNote}");
+                SendNotification("Teleported", $"{targetPlayer.DisplayName} → You{hostNote}");
             }
             catch (Exception ex)
             {

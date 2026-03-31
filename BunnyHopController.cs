@@ -25,6 +25,8 @@ namespace BonelabUtilityMod
         private static bool _autoHop = true;            // hold A to keep hopping
         private static AirStrafeMode _airStrafeMode = AirStrafeMode.EASY;
         private static float _standableNormal = 0.7f;  // Source sv_standable_normal (0.7 = ~45°)
+        private static bool _trimpEnabled = true;        // TF2-style trimp: hop off ramps to convert speed to height
+        private static float _trimpMultiplier = 1.0f;    // how aggressively horizontal speed converts to vertical
 
         // ───── Internal State ─────
         private static PhysGrounder _grounder;
@@ -34,6 +36,8 @@ namespace BonelabUtilityMod
         private static float _lastCacheTime = 0f;
         private static float _preservedSpeed = 0f;     // highest horizontal speed while airborne (no air friction)
         private static bool _onSurfRamp = false;        // true when on a slope steeper than standable normal
+        private static Vector3 _surfNormal = Vector3.up; // cached surface normal from last surf ramp check
+        private static bool _didJump = false;            // true after a real hop/trimp — gates air strafe to prevent grounder flicker
 
         // ───── Properties ─────
         public static bool Enabled
@@ -53,6 +57,8 @@ namespace BonelabUtilityMod
         public static bool AutoHop { get => _autoHop; set => _autoHop = value; }
         public static AirStrafeMode StrafeMode { get => _airStrafeMode; set => _airStrafeMode = value; }
         public static float StandableNormal { get => _standableNormal; set => _standableNormal = Mathf.Clamp(value, 0f, 1f); }
+        public static bool TrimpEnabled { get => _trimpEnabled; set => _trimpEnabled = value; }
+        public static float TrimpMultiplier { get => _trimpMultiplier; set => _trimpMultiplier = Mathf.Clamp(value, 0f, 3f); }
 
         public static void OnLevelUnloaded()
         {
@@ -62,6 +68,8 @@ namespace BonelabUtilityMod
             _wasJumpHeld = false;
             _preservedSpeed = 0f;
             _onSurfRamp = false;
+            _surfNormal = Vector3.up;
+            _didJump = false;
         }
 
         public static void Update()
@@ -98,30 +106,53 @@ namespace BonelabUtilityMod
 
                 if (grounded)
                 {
-                    // Just landed or still on ground — reset preserved speed
-                    _preservedSpeed = 0f;
-
                     bool shouldHop = false;
 
                     if (_autoHop)
                     {
-                        // Auto-hop: jump fires as long as A is held
                         shouldHop = jumpHeld;
                     }
                     else
                     {
-                        // Manual: only on fresh press
                         shouldHop = jumpHeld && !_wasJumpHeld;
                     }
 
                     if (shouldHop)
                     {
                         PerformHop(physRig);
+                        _didJump = true;
+                    }
+                    else
+                    {
+                        // Actually standing on ground without hopping — reset air state
+                        _preservedSpeed = 0f;
+                        _didJump = false;
                     }
                 }
-                else
+                else if (_onSurfRamp && rawGrounded)
                 {
-                    // Airborne — Source-style instant air strafe + no air friction
+                    // On a surf ramp — trimp or air strafe
+                    if (_trimpEnabled)
+                    {
+                        bool shouldTrimp = _autoHop ? jumpHeld : (jumpHeld && !_wasJumpHeld);
+                        if (shouldTrimp)
+                        {
+                            PerformTrimpHop(physRig);
+                            _didJump = true;
+                        }
+                        else if (_didJump)
+                        {
+                            ApplyAirStrafe(physRig, rigManager);
+                        }
+                    }
+                    else if (_didJump)
+                    {
+                        ApplyAirStrafe(physRig, rigManager);
+                    }
+                }
+                else if (_didJump)
+                {
+                    // Airborne after a real jump — air strafe + no air friction
                     ApplyAirStrafe(physRig, rigManager);
                 }
 
@@ -155,16 +186,46 @@ namespace BonelabUtilityMod
         {
             try
             {
-                var pelvis = physRig.torso?.rbPelvis;
-                if (pelvis == null) return false;
+                var feet = physRig.feet;
+                if (feet == null) return false;
+                Vector3 feetPos = feet.transform.position;
 
-                // Raycast down from pelvis
-                if (Physics.Raycast(pelvis.position, Vector3.down, out RaycastHit hit, 3f))
+                // Use multiple raycasts in a small cross pattern to avoid false positives
+                // from collider edges/seams. Take the MOST FLAT (highest normal.y) result
+                // so a single stray edge hit doesn't falsely report a surf ramp.
+                // Ignore the player layer (layer 8 in BONELAB) to avoid hitting own colliders.
+                int layerMask = ~(1 << 8);
+                float bestNormalY = 0f;
+                Vector3 bestNormal = Vector3.up;
+                bool anyHit = false;
+                float offset = 0.08f;
+
+                Vector3[] origins = new Vector3[]
                 {
-                    // hit.normal.y is the dot product with Vector3.up
-                    // Flat ground = 1.0, vertical wall = 0.0
-                    // If normal.y < standable threshold, it's a surf ramp
-                    return hit.normal.y < _standableNormal;
+                    feetPos + Vector3.up * 0.1f,
+                    feetPos + Vector3.up * 0.1f + Vector3.forward * offset,
+                    feetPos + Vector3.up * 0.1f - Vector3.forward * offset,
+                    feetPos + Vector3.up * 0.1f + Vector3.right * offset,
+                    feetPos + Vector3.up * 0.1f - Vector3.right * offset,
+                };
+
+                for (int i = 0; i < origins.Length; i++)
+                {
+                    if (Physics.Raycast(origins[i], Vector3.down, out RaycastHit hit, 0.5f, layerMask))
+                    {
+                        anyHit = true;
+                        if (hit.normal.y > bestNormalY)
+                        {
+                            bestNormalY = hit.normal.y;
+                            bestNormal = hit.normal;
+                        }
+                    }
+                }
+
+                if (anyHit)
+                {
+                    _surfNormal = bestNormal;
+                    return bestNormalY < _standableNormal;
                 }
             }
             catch { }
@@ -230,14 +291,14 @@ namespace BonelabUtilityMod
                 Vector3 horizontalVel = new Vector3(currentVel.x, 0f, currentVel.z);
                 float currentHSpeed = horizontalVel.magnitude;
 
+                // Use preserved speed from last airborne phase so ground friction doesn't kill chain hops
+                float baseSpeed = Mathf.Max(currentHSpeed, _preservedSpeed);
+
                 if (_airStrafeMode == AirStrafeMode.EASY)
                 {
-                    // EASY: hop in the stick direction relative to camera
-                    // Holding D = side hop, S = back hop, W = forward hop, etc.
                     Vector3 hopDir = GetCameraRelativeWishDir();
 
-                    // Use current speed or a minimum so hops from standstill still move
-                    float hopSpeed = Mathf.Max(currentHSpeed, _airStrafeForce);
+                    float hopSpeed = Mathf.Max(baseSpeed, _airStrafeForce);
                     hopSpeed += _hopBoost;
                     hopSpeed = Mathf.Min(hopSpeed, _maxSpeed);
 
@@ -246,10 +307,12 @@ namespace BonelabUtilityMod
                 else
                 {
                     // SOURCE: preserve current velocity direction, add boost
-                    if (currentHSpeed > 0.5f && currentHSpeed < _maxSpeed)
+                    if (baseSpeed > 0.5f && baseSpeed < _maxSpeed)
                     {
-                        Vector3 boostDir = horizontalVel.normalized;
-                        horizontalVel += boostDir * _hopBoost;
+                        Vector3 boostDir = currentHSpeed > 0.5f
+                            ? horizontalVel.normalized
+                            : GetCameraRelativeWishDir();
+                        horizontalVel = boostDir * baseSpeed + boostDir * _hopBoost;
 
                         if (horizontalVel.magnitude > _maxSpeed)
                             horizontalVel = horizontalVel.normalized * _maxSpeed;
@@ -258,6 +321,9 @@ namespace BonelabUtilityMod
 
                 Vector3 hopVelocity = new Vector3(horizontalVel.x, _jumpForce, horizontalVel.z);
 
+                // Update preserved speed so chain hops don't lose speed to ground friction
+                _preservedSpeed = new Vector3(horizontalVel.x, 0f, horizontalVel.z).magnitude;
+
                 foreach (var rb in _cachedRbs)
                 {
                     if (rb != null && rb.mass > 1f)
@@ -265,6 +331,71 @@ namespace BonelabUtilityMod
                         rb.velocity = hopVelocity;
                     }
                 }
+            }
+            catch { }
+        }
+
+        /// <summary>
+        /// TF2-style trimp: hop off a surf ramp to convert horizontal speed into vertical launch.
+        /// Uses the cached surface normal to compute slope angle.
+        /// vertical_boost = horizontal_speed × sin(slope_angle) × multiplier
+        /// remaining_horizontal = horizontal_speed × cos(slope_angle)
+        /// </summary>
+        private static void PerformTrimpHop(PhysicsRig physRig)
+        {
+            if (_cachedRbs == null || _cachedRbs.Length == 0) return;
+
+            try
+            {
+                Vector3 currentVel = Vector3.zero;
+                var pelvisRb = physRig.torso?.rbPelvis;
+                if (pelvisRb != null)
+                    currentVel = pelvisRb.velocity;
+
+                Vector3 horizontalVel = new Vector3(currentVel.x, 0f, currentVel.z);
+                float hSpeed = horizontalVel.magnitude;
+
+                if (hSpeed < 1f)
+                {
+                    // Too slow to trimp — do a normal hop instead
+                    PerformHop(physRig);
+                    return;
+                }
+
+                // Slope angle: normal.y = cos(angle_from_vertical) = cos(slope_angle_from_horizontal... no)
+                // slope_angle_from_horizontal = acos(normal.y) ... wait, that's angle from vertical
+                // Actually: slope steepness angle = acos(normal.y) where 0 = flat, 90 = vertical
+                // sin(slope_angle) = sqrt(1 - normal.y^2) → vertical conversion factor
+                // cos(slope_angle) = normal.y → horizontal remainder factor
+                float normalY = Mathf.Clamp01(_surfNormal.y);
+                float slopeSin = Mathf.Sqrt(1f - normalY * normalY);
+
+                // Convert horizontal speed to vertical based on slope steepness
+                float verticalBoost = hSpeed * slopeSin * _trimpMultiplier;
+                float remainingHSpeed = hSpeed * normalY;
+
+                // Keep horizontal direction, trade speed for height
+                Vector3 hDir = horizontalVel.normalized;
+                Vector3 trimpVel = hDir * remainingHSpeed;
+                trimpVel.y = verticalBoost + _jumpForce;
+
+                // Clamp horizontal to max speed
+                float hMag = new Vector3(trimpVel.x, 0f, trimpVel.z).magnitude;
+                if (hMag > _maxSpeed)
+                {
+                    float scale = _maxSpeed / hMag;
+                    trimpVel.x *= scale;
+                    trimpVel.z *= scale;
+                }
+
+                foreach (var rb in _cachedRbs)
+                {
+                    if (rb != null && rb.mass > 1f)
+                        rb.velocity = trimpVel;
+                }
+
+                // Set preserved speed so air strafe maintains the new horizontal speed
+                _preservedSpeed = new Vector3(trimpVel.x, 0f, trimpVel.z).magnitude;
             }
             catch { }
         }
@@ -374,9 +505,9 @@ namespace BonelabUtilityMod
             catch { }
         }
 
-        // Source/Quake constants
-        private const float SV_AIRACCELERATE = 10f;  // base air accel (Source default)
-        private const float SV_MAXAIRSPEED = 30f;    // max wish speed in air (Source: 30 u/s)
+        // Source/Quake constants — scaled for Unity meter-scale (Source uses ~2.54cm/unit)
+        private const float SV_AIRACCELERATE = 10f;
+        private const float SV_MAXAIRSPEED = 1.0f;   // ~30 Source units → ~0.76m, rounded to 1m/s
 
         /// <summary>
         /// SOURCE mode: Classic Quake/Source air acceleration.

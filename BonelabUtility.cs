@@ -11,6 +11,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
 using System.Reflection;
+using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using HarmonyLib;
 
@@ -83,12 +85,14 @@ namespace BonelabUtilityMod
         internal const string Name = "OwO";
         internal const string Description = "Bullshit Client for people with schizophrenia";
         internal const string Author = "XI";
-        internal const string Version = "4.2.6";
+        internal const string Version = "4.2.16";
 
         private static readonly string[] _emoticons = { "UwU", "QwQ", ".w.", "^w^", ";w;", "=w=", "-w-", "0w0", "7w7", "XwX" };
         private static int _emoticonIndex = 0;
         private static float _lastEmoticonSwap = 0f;
         private const float EMOTICON_CYCLE_INTERVAL = 2f;
+        private static bool _shownUpdateNotif = false;
+        private static string _remoteVersion = null;
 
         /// <summary>
         /// Advances the emoticon index if enough time has elapsed. Call once per frame from OnUpdate.
@@ -205,6 +209,16 @@ namespace BonelabUtilityMod
             DisableAvatarFXController.Initialize();
             HolsterHiderController.Initialize();
             QuickMenuController.Initialize();
+            GhostModeController.Initialize();
+            AntiSlowmoController.Initialize();
+            AntiTeleportController.Initialize();
+            AntiRagdollController.Initialize();
+            LobbyBrowserController.Initialize();
+            SpawnLoggerController.Initialize();
+            DamageMultiplierController.Initialize();
+            AINpcController.Initialize();
+            AvatarLoggerController.Initialize();
+            PlayerActionLoggerController.Initialize();
 
             // Load saved settings and apply to controllers
             // Suppress the notification that would fire on boot when loading saved toggle
@@ -219,7 +233,7 @@ namespace BonelabUtilityMod
             CheckWhitelistAndSetup();
 
             // Also hook to level loaded event as backup for whitelist + BoneMenu
-            Hooking.OnLevelLoaded += (info) => { CheckWhitelistAndSetup(); ScreenShareController.OnLevelLoaded(); WaypointController.OnLevelLoaded(); AutoHostController.OnFirstLevelLoaded(); InfiniteAmmoController.OnLevelLoaded(); HolsterHiderController.OnLevelLoaded(); if (BodyLogColorController.Enabled) BodyLogColorController.ApplyAll(); OverlayMenu.InvalidateStyles(); };
+            Hooking.OnLevelLoaded += (info) => { CheckWhitelistAndSetup(); ScreenShareController.OnLevelLoaded(); WaypointController.OnLevelLoaded(); AutoHostController.OnFirstLevelLoaded(); InfiniteAmmoController.OnLevelLoaded(); HolsterHiderController.OnLevelLoaded(); if (BodyLogColorController.Enabled) BodyLogColorController.ApplyAll(); OverlayMenu.InvalidateStyles(); ShowUpdateNotification(); GhostModeController.OnLevelLoaded(); AntiTeleportController.NotifyIntentionalTeleport(); AvatarLoggerController.OnLevelLoaded(); PlayerActionLoggerController.OnLevelLoaded(); };
 
             // Clean up cached Unity references on level unload (RigManager.OnDestroy)
             Hooking.OnLevelUnloaded += OnLevelUnloaded;
@@ -228,70 +242,114 @@ namespace BonelabUtilityMod
             BoneMenuSetup.Setup();
             ServerQueueController.ApplyPatches();
             TryAutoLoginFusion();
-            Hooking.OnLevelLoaded += (info) => { BoneMenuSetup.Setup(); ScreenShareController.OnLevelLoaded(); WaypointController.OnLevelLoaded(); AutoHostController.OnFirstLevelLoaded(); InfiniteAmmoController.OnLevelLoaded(); HolsterHiderController.OnLevelLoaded(); if (BodyLogColorController.Enabled) BodyLogColorController.ApplyAll(); OverlayMenu.InvalidateStyles(); };
+            Hooking.OnLevelLoaded += (info) => { BoneMenuSetup.Setup(); ScreenShareController.OnLevelLoaded(); WaypointController.OnLevelLoaded(); AutoHostController.OnFirstLevelLoaded(); InfiniteAmmoController.OnLevelLoaded(); HolsterHiderController.OnLevelLoaded(); if (BodyLogColorController.Enabled) BodyLogColorController.ApplyAll(); OverlayMenu.InvalidateStyles(); ShowUpdateNotification(); GhostModeController.OnLevelLoaded(); AntiTeleportController.NotifyIntentionalTeleport(); AvatarLoggerController.OnLevelLoaded(); PlayerActionLoggerController.OnLevelLoaded(); };
 
             // Clean up cached Unity references on level unload (RigManager.OnDestroy)
             Hooking.OnLevelUnloaded += OnLevelUnloaded;
 #endif
 
             MelonLog.Msg("DOOBER UTILS V3 loaded successfully!");
+
+            // Fetch latest version from GitHub (non-blocking)
+            FetchRemoteVersionAsync();
+        }
+
+        private static void ShowUpdateNotification()
+        {
+            if (_shownUpdateNotif) return;
+            _shownUpdateNotif = true;
+            try
+            {
+                string displayVersion = _remoteVersion ?? Version;
+                string message = _remoteVersion != null && _remoteVersion != Version
+                    ? $"New update available! (v{_remoteVersion})"
+                    : $"Updated! (v{displayVersion})";
+
+                Notifier.Send(new Notification
+                {
+                    Title = "owo",
+                    Message = message,
+                    Type = NotificationType.Success,
+                    PopupLength = 3f,
+                    ShowTitleOnPopup = true
+                });
+            }
+            catch { }
+        }
+
+        private static void FetchRemoteVersionAsync()
+        {
+            // Run on a plain Thread to avoid async/await thread pool continuations
+            // which crash IL2CPP's GC ("Collecting from unknown thread")
+            var thread = new Thread(() =>
+            {
+                try
+                {
+                    using var client = new HttpClient();
+                    client.Timeout = TimeSpan.FromSeconds(10);
+                    string url = "https://raw.githubusercontent.com/Largetact/owo/main/BonelabUtilityMod.csproj?t=" + DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                    string csproj = client.GetStringAsync(url).GetAwaiter().GetResult();
+
+                    var match = Regex.Match(csproj, @"<Version>([^<]+)</Version>");
+                    if (match.Success)
+                    {
+                        _remoteVersion = match.Groups[1].Value.Trim();
+                    }
+                }
+                catch { }
+            });
+            thread.IsBackground = true;
+            thread.Start();
         }
 
         /// <summary>
-        /// Fetch the whitelist from a remote URL asynchronously.
+        /// Fetch the whitelist from a remote URL on a background thread.
+        /// Avoids async/await which crashes IL2CPP's GC on thread pool threads.
         /// </summary>
 #if !NO_WHITELIST
-        private async void FetchRemoteWhitelistAsync()
+        private void FetchRemoteWhitelistAsync()
         {
             if (_whitelistFetchInProgress) return;
             _whitelistFetchInProgress = true;
 
-            try
+            var thread = new Thread(() =>
             {
-                using var client = new HttpClient();
-                client.Timeout = TimeSpan.FromSeconds(15);
-                // Add cache-busting query param so CDN/caches don't serve stale data
-                string url = DecodeXor(_encodedWhitelistUrl) + "?t=" + DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-                string response = await client.GetStringAsync(url);
-
-                var ids = new HashSet<ulong>();
-                foreach (string line in response.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries))
+                try
                 {
-                    string trimmed = line.Trim();
-                    // Skip comments and empty lines
-                    if (string.IsNullOrEmpty(trimmed) || trimmed.StartsWith("#") || trimmed.StartsWith("//"))
-                        continue;
-                    // Handle inline comments: "76561199002934372 // XI"
-                    string idPart = trimmed.Split(new[] { ' ', '\t', '/', '#' }, StringSplitOptions.RemoveEmptyEntries)[0];
-                    if (ulong.TryParse(idPart, out ulong id))
-                        ids.Add(id);
+                    using var client = new HttpClient();
+                    client.Timeout = TimeSpan.FromSeconds(15);
+                    string url = DecodeXor(_encodedWhitelistUrl) + "?t=" + DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                    string response = client.GetStringAsync(url).GetAwaiter().GetResult();
+
+                    var ids = new HashSet<ulong>();
+                    foreach (string line in response.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries))
+                    {
+                        string trimmed = line.Trim();
+                        if (string.IsNullOrEmpty(trimmed) || trimmed.StartsWith("#") || trimmed.StartsWith("//"))
+                            continue;
+                        string idPart = trimmed.Split(new[] { ' ', '\t', '/', '#' }, StringSplitOptions.RemoveEmptyEntries)[0];
+                        if (ulong.TryParse(idPart, out ulong id))
+                            ids.Add(id);
+                    }
+
+                    _remoteWhitelist = ids;
+                    _whitelistFetched = true;
+                    _whitelistFetchInProgress = false;
                 }
-
-                _remoteWhitelist = ids;
-                _whitelistFetched = true;
-                _whitelistFetchInProgress = false;
-                MelonLog.Msg($"Remote whitelist fetched: {ids.Count} SteamIDs");
-
-                // Now that we have the list, run the check
-                CheckWhitelistAndSetup();
-            }
-            catch (Exception ex)
-            {
-                _whitelistFetchInProgress = false;
-                _fetchRetryCount++;
-                MelonLog.Warning($"Remote whitelist fetch failed (attempt {_fetchRetryCount}/{MAX_FETCH_RETRIES}): {ex.Message}");
-
-                if (_fetchRetryCount < MAX_FETCH_RETRIES)
+                catch
                 {
-                    // Wait before retrying (2s, 4s, 6s)
-                    await System.Threading.Tasks.Task.Delay(_fetchRetryCount * 2000);
-                    FetchRemoteWhitelistAsync();
+                    _whitelistFetchInProgress = false;
+                    _fetchRetryCount++;
+
+                    if (_fetchRetryCount < MAX_FETCH_RETRIES)
+                    {
+                        Thread.Sleep(_fetchRetryCount * 2000);
+                        FetchRemoteWhitelistAsync();
+                    }
                 }
-                else
-                {
-                    MelonLog.Warning("Remote whitelist fetch failed after all retries — whitelist check cannot proceed");
-                }
-            }
+            });
+            thread.IsBackground = true;
+            thread.Start();
         }
 
         /// <summary>
@@ -598,6 +656,13 @@ namespace BonelabUtilityMod
             AntiGravityChangeController.Update();
             SpinbotController.Update();
             BunnyHopController.Update();
+            GhostModeController.Update();
+            AntiSlowmoController.Update();
+            AntiTeleportController.Update();
+            AntiRagdollController.Update();
+            DamageMultiplierController.Update();
+            AvatarLoggerController.Update();
+            PlayerActionLoggerController.Update();
             OverlayMenu.CheckInput();
             QuickMenuController.CheckInput();
 
@@ -609,7 +674,6 @@ namespace BonelabUtilityMod
         public override void OnLateUpdate()
         {
             FreezePlayerController.LateUpdate();
-            SpinbotController.LateUpdate();
         }
 
         /// <summary>
@@ -630,6 +694,7 @@ namespace BonelabUtilityMod
             try { XYZScaleController.OnLevelUnloaded(); } catch { }
             try { BunnyHopController.OnLevelUnloaded(); } catch { }
             try { SpinbotController.OnLevelUnloaded(); } catch { }
+            try { AntiTeleportController.OnLevelUnloaded(); } catch { }
         }
 
         public override void OnGUI()
@@ -699,12 +764,8 @@ namespace BonelabUtilityMod
                 // PLAYER submenu (God Mode, Anti-Constraint, Anti-Knockout, Unbreakable Grip)
                 // ============================================
                 var playerPage = _mainPage.CreatePage("Player", Color.green);
-                playerPage.CreateBool(
-                    "God Mode (Inf Vitality)",
-                    Color.white,
-                    GodModeController.IsGodModeEnabled,
-                    (value) => { GodModeController.IsGodModeEnabled = value; SettingsManager.MarkDirty(); }
-                );
+
+                // ── Simple toggles (alphabetical) ──
                 playerPage.CreateBool(
                     "Anti-Constraint",
                     Color.yellow,
@@ -717,16 +778,10 @@ namespace BonelabUtilityMod
                     AntiConstraintController.ClearConstraints
                 );
                 playerPage.CreateBool(
-                    "Anti-Knockout",
-                    Color.magenta,
-                    AntiKnockoutController.IsEnabled,
-                    (value) => { AntiKnockoutController.IsEnabled = value; SettingsManager.MarkDirty(); }
-                );
-                playerPage.CreateBool(
-                    "Unbreakable Grip",
+                    "Anti-Grab",
                     Color.cyan,
-                    UnbreakableGripController.IsEnabled,
-                    (value) => { UnbreakableGripController.IsEnabled = value; SettingsManager.MarkDirty(); }
+                    AntiGrabController.Enabled,
+                    (value) => { AntiGrabController.Enabled = value; SettingsManager.MarkDirty(); }
                 );
                 playerPage.CreateBool(
                     "Anti-Gravity Change [Earth Loop]",
@@ -735,13 +790,55 @@ namespace BonelabUtilityMod
                     (value) => { AntiGravityChangeController.Enabled = value; SettingsManager.MarkDirty(); }
                 );
                 playerPage.CreateBool(
+                    "Anti-Knockout",
+                    Color.magenta,
+                    AntiKnockoutController.IsEnabled,
+                    (value) => { AntiKnockoutController.IsEnabled = value; SettingsManager.MarkDirty(); }
+                );
+                playerPage.CreateBool(
+                    "Anti-Ragdoll",
+                    Color.yellow,
+                    AntiRagdollController.Enabled,
+                    (value) => { AntiRagdollController.Enabled = value; SettingsManager.MarkDirty(); }
+                );
+                playerPage.CreateBool(
+                    "Anti-Slowmo",
+                    Color.yellow,
+                    AntiSlowmoController.Enabled,
+                    (value) => { AntiSlowmoController.Enabled = value; SettingsManager.MarkDirty(); }
+                );
+                playerPage.CreateBool(
+                    "Anti-Teleport",
+                    Color.yellow,
+                    AntiTeleportController.Enabled,
+                    (value) => { AntiTeleportController.Enabled = value; SettingsManager.MarkDirty(); }
+                );
+                playerPage.CreateBool(
                     "Auto Run",
                     Color.green,
                     AutoRunController.Enabled,
                     (value) => { AutoRunController.Enabled = value; SettingsManager.MarkDirty(); }
                 );
+                playerPage.CreateBool(
+                    "Ghost Mode",
+                    Color.magenta,
+                    GhostModeController.Enabled,
+                    (value) => { GhostModeController.Enabled = value; SettingsManager.MarkDirty(); }
+                );
+                playerPage.CreateBool(
+                    "God Mode (Inf Vitality)",
+                    Color.white,
+                    GodModeController.IsGodModeEnabled,
+                    (value) => { GodModeController.IsGodModeEnabled = value; SettingsManager.MarkDirty(); }
+                );
+                playerPage.CreateBool(
+                    "Unbreakable Grip",
+                    Color.cyan,
+                    UnbreakableGripController.IsEnabled,
+                    (value) => { UnbreakableGripController.IsEnabled = value; SettingsManager.MarkDirty(); }
+                );
 
-                // Default World submenu inside Player
+                // ── Sub-pages (alphabetical) ──
                 var defaultWorldPage = playerPage.CreatePage("Default World", Color.yellow);
                 defaultWorldPage.CreateBool(
                     "Enabled",
@@ -1118,6 +1215,21 @@ namespace BonelabUtilityMod
                     BunnyHopController.AutoHop,
                     (value) => { BunnyHopController.AutoHop = value; SettingsManager.MarkDirty(); }
                 );
+                bhopPage.CreateBool(
+                    "Trimping",
+                    Color.yellow,
+                    BunnyHopController.TrimpEnabled,
+                    (value) => { BunnyHopController.TrimpEnabled = value; SettingsManager.MarkDirty(); }
+                );
+                bhopPage.CreateFloat(
+                    "Trimp Multiplier",
+                    Color.yellow,
+                    BunnyHopController.TrimpMultiplier,
+                    0.1f,
+                    0f,
+                    3f,
+                    (value) => { BunnyHopController.TrimpMultiplier = value; SettingsManager.MarkDirty(); }
+                );
 
                 // ── Spinbot submenu inside Player ──
                 var spinbotPage = playerPage.CreatePage("Spinbot", Color.magenta);
@@ -1347,6 +1459,46 @@ namespace BonelabUtilityMod
                 // COMBAT submenu (Full Auto, Ammo, Explosive Punch)
                 // ============================================
                 var combatPage = _mainPage.CreatePage("Combat", Color.red);
+
+                // ── Crazy Guns submenu inside Combat ──
+                var crazyGunsPage = combatPage.CreatePage("Crazy Guns", Color.cyan);
+
+                // ── Damage Multiplier submenu inside Combat ──
+                var damageMultPage = combatPage.CreatePage("Damage Multiplier", Color.red);
+                damageMultPage.CreateFloat(
+                    "Gun Multiplier",
+                    Color.yellow,
+                    DamageMultiplierController.GunMultiplier,
+                    0.5f,
+                    0.1f,
+                    100f,
+                    (value) => { DamageMultiplierController.GunMultiplier = value; SettingsManager.MarkDirty(); }
+                );
+                damageMultPage.CreateFloat(
+                    "Melee Multiplier",
+                    Color.red,
+                    DamageMultiplierController.MeleeMultiplier,
+                    0.5f,
+                    0.1f,
+                    100f,
+                    (value) => { DamageMultiplierController.MeleeMultiplier = value; SettingsManager.MarkDirty(); }
+                );
+                damageMultPage.CreateFunction(
+                    "Apply Now",
+                    Color.green,
+                    () => DamageMultiplierController.ApplyMultipliersNow()
+                );
+                damageMultPage.CreateFunction(
+                    "Reset to 1x",
+                    Color.white,
+                    () =>
+                    {
+                        DamageMultiplierController.GunMultiplier = 1f;
+                        DamageMultiplierController.MeleeMultiplier = 1f;
+                        SettingsManager.MarkDirty();
+                    }
+                );
+
                 combatPage.CreateBool(
                     "Full Auto Guns",
                     Color.yellow,
@@ -1359,9 +1511,6 @@ namespace BonelabUtilityMod
                     InfiniteAmmoController.IsEnabled,
                     (value) => { InfiniteAmmoController.IsEnabled = value; SettingsManager.MarkDirty(); }
                 );
-
-                // Crazy Guns submenu inside Combat
-                var crazyGunsPage = combatPage.CreatePage("Crazy Guns", Color.cyan);
                 crazyGunsPage.CreateBool("Glow Blue Guns", Color.blue, ChaosGunController.PurpleGuns,
                     (value) => { ChaosGunController.PurpleGuns = value; SettingsManager.MarkDirty(); });
                 crazyGunsPage.CreateBool("Insane Damage!", Color.red, ChaosGunController.InsaneDamage,
@@ -2500,16 +2649,6 @@ namespace BonelabUtilityMod
                 BuildSelectPlayerSubMenu(dropHomingPage);
 
                 // ============================================
-                // ANTI-GRAB (inside Player)
-                // ============================================
-                playerPage.CreateBool(
-                    "Anti-Grab",
-                    Color.cyan,
-                    AntiGrabController.Enabled,
-                    (value) => { AntiGrabController.Enabled = value; SettingsManager.MarkDirty(); }
-                );
-
-                // ============================================
                 // FORCE GRAB submenu (inside Player)
                 // ============================================
                 var forceGrabPage = playerPage.CreatePage("Force Grab", Color.magenta);
@@ -2726,8 +2865,59 @@ namespace BonelabUtilityMod
                 // ============================================
                 var utilitiesPage = _mainPage.CreatePage("Utilities", Color.yellow);
 
-                // ── Screen Share (inside Utilities) ──
-                var screenSharePage = utilitiesPage.CreatePage("Screen Share", Color.magenta);
+                // ── AI NPC Controls (inside Utilities) ──
+                var aiNpcPage = utilitiesPage.CreatePage("AI NPC Controls", Color.red);
+                aiNpcPage.CreateEnum(
+                    "Mental State",
+                    Color.yellow,
+                    AINpcController.SelectedState,
+                    (value) => { AINpcController.SelectedState = (AINpcController.NpcMentalState)value; }
+                );
+                aiNpcPage.CreateFunction("Apply State to Held NPC", Color.green, AINpcController.ApplyStateToHeld);
+                aiNpcPage.CreateFunction("Apply State to ALL NPCs", Color.red, AINpcController.ApplyStateToAll);
+                aiNpcPage.CreateFloat(
+                    "Custom HP",
+                    Color.cyan,
+                    AINpcController.CustomHp,
+                    50f,
+                    1f,
+                    10000f,
+                    (value) => { AINpcController.CustomHp = value; }
+                );
+                aiNpcPage.CreateFunction("Apply HP to Held NPC", Color.green, AINpcController.ApplyHpToHeld);
+                aiNpcPage.CreateFloat(
+                    "Custom Mass",
+                    Color.magenta,
+                    AINpcController.CustomMass,
+                    0.5f,
+                    0.01f,
+                    100f,
+                    (value) => { AINpcController.CustomMass = value; }
+                );
+                aiNpcPage.CreateFunction("Apply Mass to Held NPC", Color.green, AINpcController.ApplyMassToHeld);
+
+                // ── Anti-Despawn Effect (inside Utilities) ──
+                utilitiesPage.CreateBool(
+                    "Anti-Despawn Effect",
+                    Color.cyan,
+                    AntiDespawnController.Enabled,
+                    (value) => { AntiDespawnController.Enabled = value; SettingsManager.MarkDirty(); }
+                );
+
+                // ── Avatar Logger (inside Utilities) ──
+                var avatarLoggerPage = utilitiesPage.CreatePage("Avatar Logger", Color.green);
+                avatarLoggerPage.CreateBool(
+                    "Enabled",
+                    Color.white,
+                    AvatarLoggerController.Enabled,
+                    (value) => { AvatarLoggerController.Enabled = value; SettingsManager.MarkDirty(); }
+                );
+                avatarLoggerPage.CreateBool(
+                    "Show Notifications",
+                    Color.cyan,
+                    AvatarLoggerController.ShowNotifications,
+                    (value) => { AvatarLoggerController.ShowNotifications = value; SettingsManager.MarkDirty(); }
+                );
 
                 // ============================================
                 // SPAWN MENU submenu (inside Utilities)
@@ -2787,6 +2977,8 @@ namespace BonelabUtilityMod
                     () => SpawnableSearcher.FavoriteItemFromHand()
                 );
 
+                // ── Screen Share (inside Utilities) ──
+                var screenSharePage = utilitiesPage.CreatePage("Screen Share", Color.magenta);
                 screenSharePage.CreateBool(
                     "Enabled",
                     Color.green,
@@ -3075,7 +3267,7 @@ namespace BonelabUtilityMod
                     XYZScaleController.ScaleX,
                     0.1f,
                     0.1f,
-                    30f,
+                    10f,
                     (value) => { XYZScaleController.ScaleX = value; SettingsManager.MarkDirty(); }
                 );
                 xyzScalePage.CreateFloat(
@@ -3084,7 +3276,7 @@ namespace BonelabUtilityMod
                     XYZScaleController.ScaleY,
                     0.1f,
                     0.1f,
-                    30f,
+                    10f,
                     (value) => { XYZScaleController.ScaleY = value; SettingsManager.MarkDirty(); }
                 );
                 xyzScalePage.CreateFloat(
@@ -3093,7 +3285,7 @@ namespace BonelabUtilityMod
                     XYZScaleController.ScaleZ,
                     0.1f,
                     0.1f,
-                    30f,
+                    10f,
                     (value) => { XYZScaleController.ScaleZ = value; SettingsManager.MarkDirty(); }
                 );
                 xyzScalePage.CreateFunction(
@@ -3348,6 +3540,86 @@ namespace BonelabUtilityMod
                 // ============================================
                 var keybindPage = utilitiesPage.CreatePage("Keybinds", Color.yellow);
                 PopulateKeybindPage(keybindPage);
+
+                // ── Lobby Browser (inside Utilities) ──
+                var lobbyBrowserPage = utilitiesPage.CreatePage("Lobby Browser", Color.cyan);
+                lobbyBrowserPage.CreateFunction(
+                    "Refresh Lobbies",
+                    Color.yellow,
+                    LobbyBrowserController.RefreshLobbies
+                );
+                var lobbyListPage = lobbyBrowserPage.CreatePage("+ Lobby List", Color.green);
+                lobbyBrowserPage.CreateFunction(
+                    "Show Lobbies",
+                    Color.green,
+                    () =>
+                    {
+                        try { lobbyListPage?.RemoveAll(); } catch { }
+                        var lobbies = LobbyBrowserController.CachedLobbies;
+                        if (lobbies.Count == 0)
+                        {
+                            lobbyListPage?.CreateFunction("No lobbies found (Refresh first)", Color.gray, () => { });
+                            return;
+                        }
+                        foreach (var lobby in lobbies)
+                        {
+                            string display = $"{lobby.LobbyName} ({lobby.PlayerCount}/{lobby.MaxPlayers})";
+                            string code = lobby.LobbyCode;
+                            lobbyListPage?.CreateFunction(display, Color.green, () =>
+                            {
+                                LobbyBrowserController.JoinLobby(code);
+                            });
+                        }
+                    }
+                );
+
+                // ── Player Action Logger (inside Utilities) ──
+                var playerActionLogPage = utilitiesPage.CreatePage("Player Action Logger", Color.cyan);
+                playerActionLogPage.CreateBool(
+                    "Enabled",
+                    Color.white,
+                    PlayerActionLoggerController.Enabled,
+                    (value) => { PlayerActionLoggerController.Enabled = value; SettingsManager.MarkDirty(); }
+                );
+                playerActionLogPage.CreateBool(
+                    "Log Joins",
+                    Color.green,
+                    PlayerActionLoggerController.LogJoins,
+                    (value) => { PlayerActionLoggerController.LogJoins = value; SettingsManager.MarkDirty(); }
+                );
+                playerActionLogPage.CreateBool(
+                    "Log Leaves",
+                    Color.yellow,
+                    PlayerActionLoggerController.LogLeaves,
+                    (value) => { PlayerActionLoggerController.LogLeaves = value; SettingsManager.MarkDirty(); }
+                );
+                playerActionLogPage.CreateBool(
+                    "Log Deaths",
+                    Color.red,
+                    PlayerActionLoggerController.LogDeaths,
+                    (value) => { PlayerActionLoggerController.LogDeaths = value; SettingsManager.MarkDirty(); }
+                );
+                playerActionLogPage.CreateBool(
+                    "Show Notifications",
+                    Color.cyan,
+                    PlayerActionLoggerController.ShowNotifications,
+                    (value) => { PlayerActionLoggerController.ShowNotifications = value; SettingsManager.MarkDirty(); }
+                );
+
+                // ── Spawn Logger (inside Utilities) ──
+                var spawnLoggerPage = utilitiesPage.CreatePage("Spawn Logger", Color.green);
+                spawnLoggerPage.CreateBool(
+                    "Enabled",
+                    Color.white,
+                    SpawnLoggerController.Enabled,
+                    (value) => { SpawnLoggerController.Enabled = value; SettingsManager.MarkDirty(); }
+                );
+                spawnLoggerPage.CreateBool(
+                    "Show Notifications",
+                    Color.cyan,
+                    SpawnLoggerController.ShowNotifications,
+                    (value) => { SpawnLoggerController.ShowNotifications = value; SettingsManager.MarkDirty(); }
+                );
             }
             catch (Exception ex)
             {
@@ -3824,8 +4096,7 @@ namespace BonelabUtilityMod
     }
 
     /// <summary>
-    /// Infinite Ammo Controller - Single toggle for infinite ammo + infinite mags.
-    /// Uses per-frame scanning (no Harmony patches — IL2CPP patches can fail silently).
+    /// Infinite Ammo Controller - keeps ammo inventory infinite (magazines still need reloading).
     /// </summary>
     [HarmonyPatch]
     public static class InfiniteAmmoController
@@ -3875,40 +4146,7 @@ namespace BonelabUtilityMod
             EnsureAmmo();
         }
 
-        /// <summary>
-        /// Harmony postfix: when grabbing a magazine, refill it to max capacity.
-        /// </summary>
-        [HarmonyPatch(typeof(Magazine), "OnGrab")]
-        [HarmonyPostfix]
-        public static void MagazineOnGrabPostfix()
-        {
-            if (!_enabled) return;
-            try
-            {
-                Magazine magL = Player.GetComponentInHand<Magazine>(Player.LeftHand);
-                Magazine magR = Player.GetComponentInHand<Magazine>(Player.RightHand);
-                if (magL != null) RefillMag(magL);
-                if (magR != null) RefillMag(magR);
-            }
-            catch { }
-        }
 
-        /// <summary>
-        /// Harmony postfix: after firing, refill the magazine so it never empties.
-        /// </summary>
-        [HarmonyPatch(typeof(Gun), "OnFire")]
-        [HarmonyPostfix]
-        public static void GunOnFirePostfix(Gun __instance)
-        {
-            if (!_enabled) return;
-            try
-            {
-                var mag = ((UnityEngine.Component)__instance).gameObject.GetComponentInChildren<Magazine>();
-                if (mag != null)
-                    mag.magazineState.Refill();
-            }
-            catch { }
-        }
 
         /// <summary>
         /// Harmony prefix: override AmmoCount to always return 1 for guns without magazines (shotguns etc).
@@ -3925,41 +4163,7 @@ namespace BonelabUtilityMod
             return true;
         }
 
-        /// <summary>
-        /// Harmony postfix: when a magazine is ejected, refill it so re-inserting gives full ammo.
-        /// </summary>
-        [HarmonyPatch(typeof(Magazine), "OnEject")]
-        [HarmonyPostfix]
-        public static void MagazineOnEjectPostfix(Magazine __instance)
-        {
-            if (!_enabled) return;
-            try
-            {
-                __instance.magazineState.Refill();
-            }
-            catch { }
-        }
 
-        private static void RefillMag(Magazine mag)
-        {
-            try
-            {
-                int maxRounds = mag.magazineState.magazineData.rounds;
-                int currentAmmo = AmmoInventory.Instance.GetCartridgeCount(mag.magazineState.cartridgeData);
-                if (currentAmmo < maxRounds)
-                {
-                    // Determine which ammo group this magazine uses and top it up
-                    if (AmmoInventory.Instance.GetCartridgeCount("light") == currentAmmo)
-                        AmmoInventory.Instance.AddCartridge(AmmoInventory.Instance.lightAmmoGroup, maxRounds);
-                    else if (AmmoInventory.Instance.GetCartridgeCount("medium") == currentAmmo)
-                        AmmoInventory.Instance.AddCartridge(AmmoInventory.Instance.mediumAmmoGroup, maxRounds);
-                    else if (AmmoInventory.Instance.GetCartridgeCount("heavy") == currentAmmo)
-                        AmmoInventory.Instance.AddCartridge(AmmoInventory.Instance.heavyAmmoGroup, maxRounds);
-                }
-                mag.magazineState.Refill();
-            }
-            catch { }
-        }
 
         /// <summary>Ensure all ammo types have at least some ammo.</summary>
         private static void EnsureAmmo()

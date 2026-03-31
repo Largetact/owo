@@ -804,6 +804,8 @@ namespace BonelabUtilityMod
                 BunnyHopController.AutoHop = GetBool("BunnyHop", "AutoHop", true);
                 BunnyHopController.StrafeMode = (AirStrafeMode)GetInt("BunnyHop", "StrafeMode", (int)AirStrafeMode.EASY);
                 BunnyHopController.StandableNormal = GetFloat("BunnyHop", "StandableNormal", 0.7f);
+                BunnyHopController.TrimpEnabled = GetBool("BunnyHop", "TrimpEnabled", true);
+                BunnyHopController.TrimpMultiplier = GetFloat("BunnyHop", "TrimpMultiplier", 1.0f);
             }, "Load BunnyHop");
 
             SafeExecute(() =>
@@ -837,6 +839,53 @@ namespace BonelabUtilityMod
                 HolsterHiderController.HideAmmoPouch = GetBool("HolsterHider", "HideAmmoPouch", false);
                 HolsterHiderController.HideBodyLog = GetBool("HolsterHider", "HideBodyLog", false);
             }, "Load Holster Hider");
+
+            SafeExecute(() =>
+            {
+                GhostModeController.Enabled = GetBool("GhostMode", "Enabled", false);
+            }, "Load Ghost Mode");
+
+            SafeExecute(() =>
+            {
+                AntiSlowmoController.Enabled = GetBool("AntiSlowmo", "Enabled", false);
+            }, "Load Anti-Slowmo");
+
+            SafeExecute(() =>
+            {
+                AntiTeleportController.Enabled = GetBool("AntiTeleport", "Enabled", false);
+            }, "Load Anti-Teleport");
+
+            SafeExecute(() =>
+            {
+                AntiRagdollController.Enabled = GetBool("AntiRagdoll", "Enabled", false);
+            }, "Load Anti-Ragdoll");
+
+            SafeExecute(() =>
+            {
+                SpawnLoggerController.Enabled = GetBool("SpawnLogger", "Enabled", false);
+                SpawnLoggerController.ShowNotifications = GetBool("SpawnLogger", "ShowNotifications", true);
+            }, "Load Spawn Logger");
+
+            SafeExecute(() =>
+            {
+                DamageMultiplierController.GunMultiplier = GetFloat("DamageMultiplier", "GunMultiplier", 1f);
+                DamageMultiplierController.MeleeMultiplier = GetFloat("DamageMultiplier", "MeleeMultiplier", 1f);
+            }, "Load Damage Multiplier");
+
+            SafeExecute(() =>
+            {
+                AvatarLoggerController.Enabled = GetBool("AvatarLogger", "Enabled", false);
+                AvatarLoggerController.ShowNotifications = GetBool("AvatarLogger", "ShowNotifications", true);
+            }, "Load Avatar Logger");
+
+            SafeExecute(() =>
+            {
+                PlayerActionLoggerController.Enabled = GetBool("PlayerActionLogger", "Enabled", false);
+                PlayerActionLoggerController.LogJoins = GetBool("PlayerActionLogger", "LogJoins", true);
+                PlayerActionLoggerController.LogLeaves = GetBool("PlayerActionLogger", "LogLeaves", true);
+                PlayerActionLoggerController.LogDeaths = GetBool("PlayerActionLogger", "LogDeaths", true);
+                PlayerActionLoggerController.ShowNotifications = GetBool("PlayerActionLogger", "ShowNotifications", true);
+            }, "Load Player Action Logger");
 
             SafeExecute(() =>
             {
@@ -1338,6 +1387,8 @@ namespace BonelabUtilityMod
                 SetBool("BunnyHop", "AutoHop", BunnyHopController.AutoHop);
                 SetInt("BunnyHop", "StrafeMode", (int)BunnyHopController.StrafeMode);
                 SetFloat("BunnyHop", "StandableNormal", BunnyHopController.StandableNormal);
+                SetBool("BunnyHop", "TrimpEnabled", BunnyHopController.TrimpEnabled);
+                SetFloat("BunnyHop", "TrimpMultiplier", BunnyHopController.TrimpMultiplier);
             }, "Save BunnyHop");
 
             SafeExecute(() =>
@@ -1371,6 +1422,53 @@ namespace BonelabUtilityMod
                 SetBool("HolsterHider", "HideAmmoPouch", HolsterHiderController.HideAmmoPouch);
                 SetBool("HolsterHider", "HideBodyLog", HolsterHiderController.HideBodyLog);
             }, "Save Holster Hider");
+
+            SafeExecute(() =>
+            {
+                SetBool("GhostMode", "Enabled", GhostModeController.Enabled);
+            }, "Save Ghost Mode");
+
+            SafeExecute(() =>
+            {
+                SetBool("AntiSlowmo", "Enabled", AntiSlowmoController.Enabled);
+            }, "Save Anti-Slowmo");
+
+            SafeExecute(() =>
+            {
+                SetBool("AntiTeleport", "Enabled", AntiTeleportController.Enabled);
+            }, "Save Anti-Teleport");
+
+            SafeExecute(() =>
+            {
+                SetBool("AntiRagdoll", "Enabled", AntiRagdollController.Enabled);
+            }, "Save Anti-Ragdoll");
+
+            SafeExecute(() =>
+            {
+                SetBool("SpawnLogger", "Enabled", SpawnLoggerController.Enabled);
+                SetBool("SpawnLogger", "ShowNotifications", SpawnLoggerController.ShowNotifications);
+            }, "Save Spawn Logger");
+
+            SafeExecute(() =>
+            {
+                SetFloat("DamageMultiplier", "GunMultiplier", DamageMultiplierController.GunMultiplier);
+                SetFloat("DamageMultiplier", "MeleeMultiplier", DamageMultiplierController.MeleeMultiplier);
+            }, "Save Damage Multiplier");
+
+            SafeExecute(() =>
+            {
+                SetBool("AvatarLogger", "Enabled", AvatarLoggerController.Enabled);
+                SetBool("AvatarLogger", "ShowNotifications", AvatarLoggerController.ShowNotifications);
+            }, "Save Avatar Logger");
+
+            SafeExecute(() =>
+            {
+                SetBool("PlayerActionLogger", "Enabled", PlayerActionLoggerController.Enabled);
+                SetBool("PlayerActionLogger", "LogJoins", PlayerActionLoggerController.LogJoins);
+                SetBool("PlayerActionLogger", "LogLeaves", PlayerActionLoggerController.LogLeaves);
+                SetBool("PlayerActionLogger", "LogDeaths", PlayerActionLoggerController.LogDeaths);
+                SetBool("PlayerActionLogger", "ShowNotifications", PlayerActionLoggerController.ShowNotifications);
+            }, "Save Player Action Logger");
 
             SafeExecute(() =>
             {

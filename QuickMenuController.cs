@@ -839,7 +839,13 @@ namespace BonelabUtilityMod
                 string query = (_launcherSearch ?? "").Trim().ToLower();
                 foreach (var kvp in allSpawnables)
                 {
-                    if (string.IsNullOrEmpty(query) || kvp.Value.ToLower().Contains(query))
+                    // Filter out magazines
+                    string titleLower = kvp.Value.ToLower();
+                    string barcodeLower = kvp.Key.ToLower();
+                    if (titleLower.Contains("magazine") || barcodeLower.Contains("magazine"))
+                        continue;
+
+                    if (string.IsNullOrEmpty(query) || titleLower.Contains(query))
                     {
                         _launcherResults.Add(new SpawnableEntry { BarcodeID = kvp.Key, Title = kvp.Value });
                     }

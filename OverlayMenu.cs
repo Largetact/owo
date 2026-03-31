@@ -2,6 +2,7 @@ using MelonLoader;
 using UnityEngine;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace BonelabUtilityMod
 {
@@ -23,6 +24,13 @@ namespace BonelabUtilityMod
         private static List<(string barcode, string title)> _spawnOnPlayerSearchResults = new List<(string, string)>();
         private static List<(string barcode, string title)> _waypointSearchResults = new List<(string, string)>();
         private static List<(string barcode, string title)> _explosivePunchSearchResults = new List<(string, string)>();
+        private static string _randExplodeSearchQuery = "";
+        private static List<(string barcode, string title)> _randExplodeSearchResults = new List<(string, string)>();
+
+        // Spoofing text input buffers
+        private static string _spoofUsernameInput = "Player";
+        private static string _spoofNicknameInput = "";
+        private static string _spoofDescriptionInput = "";
 
         // Block system search states
         private static string _playerBlockSearchQuery = "";
@@ -63,6 +71,10 @@ namespace BonelabUtilityMod
         private static bool _playerForceGrab = false;
         private static bool _playerAutoRun = false;
         private static bool _playerDefaultWorld = false;
+        private static bool _playerGhostMode = false;
+        private static bool _playerAntiRagdoll = false;
+        private static bool _playerAntiSlowmo = false;
+        private static bool _playerAntiTeleport = false;
 
         // Combat page collapsible sections
         private static bool _combatExpPunch = false;
@@ -74,6 +86,25 @@ namespace BonelabUtilityMod
         private static bool _combatCrazyGuns = false;
         private static bool _combatSpawnOnPlayer = false;
         private static bool _combatWaypointProj = false;
+        private static bool _combatDamageMult = false;
+
+        // Utility page collapsible sections (new)
+        private static bool _utilAINpc = false;
+        private static bool _utilAvatarLogger = false;
+        private static bool _utilPlayerActionLog = false;
+        private static bool _utilSpawnLogger = false;
+        private static bool _utilLobbyBrowser = false;
+        private static bool _utilSpoofing = false;
+
+        // Spoofing mod reflection cache
+        private static Type _spoofingModType;
+        private static bool _spoofingModChecked;
+        private static System.Reflection.PropertyInfo _spoofUserEnabled;
+        private static System.Reflection.PropertyInfo _spoofNickEnabled;
+        private static System.Reflection.PropertyInfo _spoofDescEnabled;
+        private static System.Reflection.PropertyInfo _spoofFakeUsername;
+        private static System.Reflection.PropertyInfo _spoofFakeNickname;
+        private static System.Reflection.PropertyInfo _spoofFakeDescription;
 
         // Launcher page collapsible sections
         private static bool _launcherMain = false;
@@ -1162,6 +1193,14 @@ namespace BonelabUtilityMod
                 bool bhAuto = BunnyHopController.AutoHop;
                 y = Toggle(ref bhAuto, "Auto Hop", y, w);
                 BunnyHopController.AutoHop = bhAuto;
+
+                bool bhTrimp = BunnyHopController.TrimpEnabled;
+                y = Toggle(ref bhTrimp, "Trimping", y, w);
+                BunnyHopController.TrimpEnabled = bhTrimp;
+
+                float bhTrimpMul = BunnyHopController.TrimpMultiplier;
+                y = Slider("Trimp Multiplier", ref bhTrimpMul, 0f, 3f, y, w, "F2");
+                BunnyHopController.TrimpMultiplier = bhTrimpMul;
             }
 
             y = Gap(y, 10f);
@@ -1331,6 +1370,42 @@ namespace BonelabUtilityMod
                 y = Label($"Level: {(string.IsNullOrEmpty(DefaultWorldController.LevelName) ? "(none)" : DefaultWorldController.LevelName)}", y, w);
                 y = Button("Set Current Level", y, 200f, 28f, () => DefaultWorldController.SetCurrentLevelAsDefault());
                 y = Button("Clear Default", y, 200f, 28f, () => DefaultWorldController.ClearDefault());
+            }
+
+            y = Gap(y, 10f);
+            y = CollapsibleHeader("GHOST MODE", ref _playerGhostMode, y, w);
+            if (_playerGhostMode)
+            {
+                bool gm2 = GhostModeController.Enabled;
+                y = Toggle(ref gm2, "Enabled", y, w);
+                GhostModeController.Enabled = gm2;
+            }
+
+            y = Gap(y, 10f);
+            y = CollapsibleHeader("ANTI-RAGDOLL", ref _playerAntiRagdoll, y, w);
+            if (_playerAntiRagdoll)
+            {
+                bool ar2 = AntiRagdollController.Enabled;
+                y = Toggle(ref ar2, "Enabled", y, w);
+                AntiRagdollController.Enabled = ar2;
+            }
+
+            y = Gap(y, 10f);
+            y = CollapsibleHeader("ANTI-SLOWMO", ref _playerAntiSlowmo, y, w);
+            if (_playerAntiSlowmo)
+            {
+                bool as2 = AntiSlowmoController.Enabled;
+                y = Toggle(ref as2, "Enabled", y, w);
+                AntiSlowmoController.Enabled = as2;
+            }
+
+            y = Gap(y, 10f);
+            y = CollapsibleHeader("ANTI-TELEPORT", ref _playerAntiTeleport, y, w);
+            if (_playerAntiTeleport)
+            {
+                bool at2 = AntiTeleportController.Enabled;
+                y = Toggle(ref at2, "Enabled", y, w);
+                AntiTeleportController.Enabled = at2;
             }
         }
 
@@ -1660,6 +1735,8 @@ namespace BonelabUtilityMod
                 RandomExplodeController.SelectedExplosion = reExpType;
 
                 y = Label("Custom Barcode: " + (string.IsNullOrEmpty(RandomExplodeController.CustomBarcode) ? "(none)" : RandomExplodeController.CustomBarcode), y, w);
+                y = DrawSpawnableSearch("Search Custom Explode", ref _randExplodeSearchQuery, _randExplodeSearchResults,
+                    (barcode, title) => { RandomExplodeController.CustomBarcode = barcode; }, y, w);
 
                 float reInterval = RandomExplodeController.Interval;
                 y = Slider("Interval (sec)", ref reInterval, 0.1f, 60f, y, w);
@@ -1731,9 +1808,9 @@ namespace BonelabUtilityMod
                 y = Toggle(ref fae, "Enabled", y, w);
                 FullAutoController.IsFullAutoEnabled = fae;
 
-                float faRate = FullAutoController.FireRate;
-                y = Slider("Fire Rate (RPM)", ref faRate, 60f, 2000f, y, w, "F0");
-                FullAutoController.FireRate = faRate;
+                float faMult = FullAutoController.FireRateMultiplier;
+                y = Slider("Fire Rate Multiplier", ref faMult, 1f, 1000f, y, w, "F1");
+                FullAutoController.FireRateMultiplier = faMult;
             }
 
             y = Gap(y, 10f);
@@ -1982,6 +2059,22 @@ namespace BonelabUtilityMod
 
                 y = DrawSpawnableSearch("Search Waypoint Item", ref _waypointSearchQuery, _waypointSearchResults,
                     (barcode, title) => { WaypointController.CurrentBarcode = barcode; WaypointController.CurrentItemName = title; }, y, w);
+            }
+
+            y = Gap(y, 10f);
+            y = CollapsibleHeader("DAMAGE MULTIPLIER", ref _combatDamageMult, y, w);
+            if (_combatDamageMult)
+            {
+                float dmGun = DamageMultiplierController.GunMultiplier;
+                y = Slider("Gun Multiplier", ref dmGun, 0.1f, 100f, y, w);
+                DamageMultiplierController.GunMultiplier = dmGun;
+
+                float dmMelee = DamageMultiplierController.MeleeMultiplier;
+                y = Slider("Melee Multiplier", ref dmMelee, 0.1f, 100f, y, w);
+                DamageMultiplierController.MeleeMultiplier = dmMelee;
+
+                y = Button("Apply Now", y, 200f, 28f, () => DamageMultiplierController.ApplyMultipliersNow());
+                y = Button("Reset to 1x", y, 200f, 28f, () => { DamageMultiplierController.GunMultiplier = 1f; DamageMultiplierController.MeleeMultiplier = 1f; });
             }
         }
 
@@ -2450,15 +2543,15 @@ namespace BonelabUtilityMod
                 XYZScaleController.Enabled = xyzEn;
 
                 float sx = XYZScaleController.ScaleX;
-                y = Slider("Scale X", ref sx, 0.1f, 30f, y, w);
+                y = Slider("Scale X", ref sx, 0.1f, 10f, y, w);
                 XYZScaleController.ScaleX = sx;
 
                 float sy = XYZScaleController.ScaleY;
-                y = Slider("Scale Y", ref sy, 0.1f, 30f, y, w);
+                y = Slider("Scale Y", ref sy, 0.1f, 10f, y, w);
                 XYZScaleController.ScaleY = sy;
 
                 float sz = XYZScaleController.ScaleZ;
-                y = Slider("Scale Z", ref sz, 0.1f, 30f, y, w);
+                y = Slider("Scale Z", ref sz, 0.1f, 10f, y, w);
                 XYZScaleController.ScaleZ = sz;
 
                 y = Button("Apply Scale", y, 200f, 28f, () => XYZScaleController.ApplyScale());
@@ -2549,6 +2642,166 @@ namespace BonelabUtilityMod
                     }
                     GUI.color = Color.white;
                     y += ROW + 1f;
+                }
+            }
+
+            y = Gap(y, 10f);
+            y = CollapsibleHeader("AI NPC CONTROLS", ref _utilAINpc, y, w);
+            if (_utilAINpc)
+            {
+                y = Button("Apply State to Held NPC", y, 250f, 28f, () => AINpcController.ApplyStateToHeld());
+                y = Button("Apply State to ALL NPCs", y, 250f, 28f, () => AINpcController.ApplyStateToAll());
+                y = Button("Apply HP to Held NPC", y, 250f, 28f, () => AINpcController.ApplyHpToHeld());
+                y = Button("Apply Mass to Held NPC", y, 250f, 28f, () => AINpcController.ApplyMassToHeld());
+            }
+
+            y = Gap(y, 10f);
+            y = CollapsibleHeader("AVATAR LOGGER", ref _utilAvatarLogger, y, w);
+            if (_utilAvatarLogger)
+            {
+                bool avl = AvatarLoggerController.Enabled;
+                y = Toggle(ref avl, "Enabled", y, w);
+                AvatarLoggerController.Enabled = avl;
+
+                bool avlN = AvatarLoggerController.ShowNotifications;
+                y = Toggle(ref avlN, "Show Notifications", y, w);
+                AvatarLoggerController.ShowNotifications = avlN;
+            }
+
+            y = Gap(y, 10f);
+            y = CollapsibleHeader("PLAYER ACTION LOGGER", ref _utilPlayerActionLog, y, w);
+            if (_utilPlayerActionLog)
+            {
+                bool pal = PlayerActionLoggerController.Enabled;
+                y = Toggle(ref pal, "Enabled", y, w);
+                PlayerActionLoggerController.Enabled = pal;
+
+                bool palJ = PlayerActionLoggerController.LogJoins;
+                y = Toggle(ref palJ, "Log Joins", y, w);
+                PlayerActionLoggerController.LogJoins = palJ;
+
+                bool palL = PlayerActionLoggerController.LogLeaves;
+                y = Toggle(ref palL, "Log Leaves", y, w);
+                PlayerActionLoggerController.LogLeaves = palL;
+
+                bool palD = PlayerActionLoggerController.LogDeaths;
+                y = Toggle(ref palD, "Log Deaths", y, w);
+                PlayerActionLoggerController.LogDeaths = palD;
+
+                bool palN = PlayerActionLoggerController.ShowNotifications;
+                y = Toggle(ref palN, "Show Notifications", y, w);
+                PlayerActionLoggerController.ShowNotifications = palN;
+            }
+
+            y = Gap(y, 10f);
+            y = CollapsibleHeader("SPAWN LOGGER", ref _utilSpawnLogger, y, w);
+            if (_utilSpawnLogger)
+            {
+                bool sl = SpawnLoggerController.Enabled;
+                y = Toggle(ref sl, "Enabled", y, w);
+                SpawnLoggerController.Enabled = sl;
+
+                bool slN = SpawnLoggerController.ShowNotifications;
+                y = Toggle(ref slN, "Show Notifications", y, w);
+                SpawnLoggerController.ShowNotifications = slN;
+            }
+
+            y = Gap(y, 10f);
+            y = CollapsibleHeader("LOBBY BROWSER", ref _utilLobbyBrowser, y, w);
+            if (_utilLobbyBrowser)
+            {
+                y = Button("Refresh Lobbies", y, 250f, 28f, () => LobbyBrowserController.RefreshLobbies());
+                y = Label(LobbyBrowserController.StatusText, y, w);
+                var lobbies = LobbyBrowserController.CachedLobbies;
+                if (lobbies.Count > 0)
+                {
+                    foreach (var lobby in lobbies)
+                    {
+                        string code = lobby.LobbyCode;
+                        string info = $"[{lobby.PlayerCount}/{lobby.MaxPlayers}] {lobby.HostName} — {lobby.LevelTitle}";
+                        y = Button(info, y, w, 28f, () => LobbyBrowserController.JoinLobby(code));
+                    }
+                }
+            }
+
+            // Spoofing integration (only if StandaloneSpoofing.dll is loaded)
+            if (!_spoofingModChecked)
+            {
+                _spoofingModChecked = true;
+                try
+                {
+                    _spoofingModType = AppDomain.CurrentDomain.GetAssemblies()
+                        .SelectMany(a => { try { return a.GetTypes(); } catch { return new Type[0]; } })
+                        .FirstOrDefault(t => t.FullName == "StandaloneSpoofing.SpoofingMod");
+                    if (_spoofingModType != null)
+                    {
+                        var flags = System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static;
+                        _spoofUserEnabled = _spoofingModType.GetProperty("UsernameSpoofEnabled", flags);
+                        _spoofNickEnabled = _spoofingModType.GetProperty("NicknameSpoofEnabled", flags);
+                        _spoofDescEnabled = _spoofingModType.GetProperty("DescriptionSpoofEnabled", flags);
+                        _spoofFakeUsername = _spoofingModType.GetProperty("FakeUsername", flags);
+                        _spoofFakeNickname = _spoofingModType.GetProperty("FakeNickname", flags);
+                        _spoofFakeDescription = _spoofingModType.GetProperty("FakeDescription", flags);
+                    }
+                }
+                catch { }
+            }
+
+            if (_spoofingModType != null)
+            {
+                y = Gap(y, 10f);
+                y = CollapsibleHeader("SPOOFING", ref _utilSpoofing, y, w);
+                if (_utilSpoofing)
+                {
+                    try
+                    {
+                        // Username spoof
+                        bool userEn = (bool)(_spoofUserEnabled?.GetValue(null) ?? false);
+                        y = Toggle(ref userEn, "Username Spoof", y, w);
+                        _spoofUserEnabled?.SetValue(null, userEn);
+                        GUI.Label(new Rect(PAD, y, 80f, ROW), "Username:");
+                        _spoofUsernameInput = GUI.TextField(new Rect(PAD + 85f, y, w - 95f, ROW), _spoofUsernameInput ?? "");
+                        y += ROW + 2f;
+                        if (_spoofFakeUsername != null)
+                        {
+                            string cur = _spoofFakeUsername.GetValue(null) as string ?? "";
+                            if (cur != _spoofUsernameInput) _spoofFakeUsername.SetValue(null, _spoofUsernameInput);
+                        }
+
+                        // Nickname spoof
+                        bool nickEn = (bool)(_spoofNickEnabled?.GetValue(null) ?? false);
+                        y = Toggle(ref nickEn, "Nickname Spoof", y, w);
+                        _spoofNickEnabled?.SetValue(null, nickEn);
+                        GUI.Label(new Rect(PAD, y, 80f, ROW), "Nickname:");
+                        _spoofNicknameInput = GUI.TextField(new Rect(PAD + 85f, y, w - 95f, ROW), _spoofNicknameInput ?? "");
+                        y += ROW + 2f;
+                        if (_spoofFakeNickname != null)
+                        {
+                            string cur = _spoofFakeNickname.GetValue(null) as string ?? "";
+                            if (cur != _spoofNicknameInput) _spoofFakeNickname.SetValue(null, _spoofNicknameInput);
+                        }
+
+                        // Description spoof
+                        bool descEn = (bool)(_spoofDescEnabled?.GetValue(null) ?? false);
+                        y = Toggle(ref descEn, "Description Spoof", y, w);
+                        _spoofDescEnabled?.SetValue(null, descEn);
+                        GUI.Label(new Rect(PAD, y, 80f, ROW), "Description:");
+                        _spoofDescriptionInput = GUI.TextField(new Rect(PAD + 85f, y, w - 95f, ROW), _spoofDescriptionInput ?? "");
+                        y += ROW + 2f;
+                        if (_spoofFakeDescription != null)
+                        {
+                            string cur = _spoofFakeDescription.GetValue(null) as string ?? "";
+                            if (cur != _spoofDescriptionInput) _spoofFakeDescription.SetValue(null, _spoofDescriptionInput);
+                        }
+
+                        y = Button("Disable ALL Spoofs", y, 200f, 28f, () =>
+                        {
+                            _spoofUserEnabled?.SetValue(null, false);
+                            _spoofNickEnabled?.SetValue(null, false);
+                            _spoofDescEnabled?.SetValue(null, false);
+                        });
+                    }
+                    catch { }
                 }
             }
         }

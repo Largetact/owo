@@ -1,8 +1,7 @@
 using MelonLoader;
+using HarmonyLib;
 using UnityEngine;
 using BoneLib;
-using Il2CppSLZ.Marrow;
-using Il2CppInterop.Runtime.InteropTypes;
 using System;
 
 namespace BonelabUtilityMod
@@ -14,15 +13,10 @@ namespace BonelabUtilityMod
     }
 
     /// <summary>
-    /// Spinbot — spins the player’s playspace yaw (vrRoot) so Fusion syncs
-    /// the spin to other players.
-    ///
-    /// Approach:  Apply the accumulated spin to vrRoot in Update() (so Fusion
-    /// reads the spun rotation during its own Update tick), then remove it
-    /// in LateUpdate() (which runs after ALL Updates but BEFORE rendering).
-    /// The local camera renders with an unspun vrRoot, so the player sees
-    /// nothing.  Works with both real VR and FlatPlayer’s MockHMD because
-    /// we never touch the camera or XRHmd — only vrRoot.
+    /// Spinbot — Harmony patches LabFusion's RigPose.ReadSkeleton() to inject
+    /// spin rotation into the outgoing TrackedPlayspace quaternion.
+    /// Only the network pose data is modified; the local player is never touched.
+    /// Remote players see you spinning; you see nothing.
     /// </summary>
     public static class SpinbotController
     {
@@ -30,31 +24,15 @@ namespace BonelabUtilityMod
         private static float _speed = 720f;
         private static SpinDirection _direction = SpinDirection.RIGHT;
 
-        // Accumulated spin angle (ever-increasing while enabled).
-        // This is the total degrees of spin that remote players see.
+        // Accumulated spin angle (degrees, ever-increasing while enabled)
         private static float _totalSpinAngle = 0f;
-
-        // Whether the spin is currently applied to vrRoot (applied in Update,
-        // removed in LateUpdate).
-        private static bool _spinApplied = false;
-
-        private static Transform _vrRoot = null;
 
         public static bool Enabled
         {
             get => _enabled;
             set
             {
-                // If disabling while spin is on the transform, undo it now
-                if (_enabled && !value)
-                {
-                    if (_spinApplied && _vrRoot != null)
-                    {
-                        try { _vrRoot.Rotate(Vector3.up, -_totalSpinAngle, Space.World); } catch { }
-                        _spinApplied = false;
-                    }
-                    _totalSpinAngle = 0f;
-                }
+                if (!value) _totalSpinAngle = 0f;
                 _enabled = value;
                 Main.MelonLog.Msg($"Spinbot {(value ? "ON" : "OFF")} ({_speed}°/s {_direction})");
             }
@@ -73,66 +51,56 @@ namespace BonelabUtilityMod
         }
 
         /// <summary>
-        /// Called from BonelabUtility.OnUpdate.
-        /// Applies the full accumulated spin to vrRoot so that Fusion’s
-        /// Update reads spun TrackedPlayspace rotation and syncs it.
+        /// Called from BonelabUtility.OnUpdate to advance the spin angle.
+        /// No transforms are modified — only the angle accumulator.
         /// </summary>
         public static void Update()
         {
             if (!_enabled) return;
-
-            try
-            {
-                if (_vrRoot == null)
-                {
-                    var rig = Player.RigManager;
-                    if (rig == null) return;
-                    var ocr = ((Il2CppObjectBase)rig.ControllerRig).TryCast<OpenControllerRig>();
-                    if (ocr == null || ocr.vrRoot == null) return;
-                    _vrRoot = ((Component)ocr.vrRoot).transform;
-                }
-
-                float sign = _direction == SpinDirection.RIGHT ? 1f : -1f;
-                float frameAngle = sign * _speed * Time.deltaTime;
-                _totalSpinAngle += frameAngle;
-
-                // Apply the full accumulated spin as a world-space Y rotation.
-                // Since LateUpdate removed it last frame, vrRoot is currently
-                // “clean” (no spin).  We add the full total so Fusion reads
-                // the correct absolute rotation.
-                _vrRoot.Rotate(Vector3.up, _totalSpinAngle, Space.World);
-                _spinApplied = true;
-            }
-            catch { }
+            float sign = _direction == SpinDirection.RIGHT ? 1f : -1f;
+            _totalSpinAngle += sign * _speed * Time.deltaTime;
         }
 
         /// <summary>
-        /// Called from BonelabUtility.OnLateUpdate.
-        /// Runs AFTER all Updates (including Fusion’s) but BEFORE rendering.
-        /// Removes the spin from vrRoot so the local camera renders normally.
-        /// Because both the spin and the undo are pure Y-axis world rotations,
-        /// any smooth-turn or other rotation applied between Update and
-        /// LateUpdate is preserved (Y-axis quaternions commute).
+        /// Returns the current spin rotation to inject into the network pose.
+        /// Called by the Harmony postfix on RigPose.ReadSkeleton.
         /// </summary>
-        public static void LateUpdate()
+        public static Quaternion GetSpinRotation()
         {
-            if (!_spinApplied) return;
-
-            try
-            {
-                if (_vrRoot != null)
-                    _vrRoot.Rotate(Vector3.up, -_totalSpinAngle, Space.World);
-            }
-            catch { }
-
-            _spinApplied = false;
+            if (!_enabled) return Quaternion.identity;
+            return Quaternion.AngleAxis(_totalSpinAngle, Vector3.up);
         }
 
         public static void OnLevelUnloaded()
         {
             _totalSpinAngle = 0f;
-            _vrRoot = null;
-            _spinApplied = false;
+        }
+    }
+
+    /// <summary>
+    /// Harmony postfix on LabFusion's RigPose.ReadSkeleton().
+    /// After Fusion reads the real TrackedPlayspace rotation, we multiply
+    /// in the spinbot rotation. The modified quaternion gets serialized
+    /// and sent to remote clients. Local player is never affected.
+    /// </summary>
+    [HarmonyPatch(typeof(LabFusion.Entities.RigPose), nameof(LabFusion.Entities.RigPose.ReadSkeleton))]
+    public static class SpinbotReadSkeletonPatch
+    {
+        public static void Postfix(object __instance)
+        {
+            if (!SpinbotController.Enabled) return;
+
+            try
+            {
+                var pose = __instance as LabFusion.Entities.RigPose;
+                if (pose == null) return;
+
+                // Multiply spin into the playspace rotation
+                Quaternion spun = SpinbotController.GetSpinRotation() * pose.TrackedPlayspaceExpanded;
+                pose.TrackedPlayspaceExpanded = spun;
+                pose.TrackedPlayspace = LabFusion.Data.SerializedSmallQuaternion.Compress(spun);
+            }
+            catch { }
         }
     }
 }

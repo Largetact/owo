@@ -1195,13 +1195,6 @@ namespace BonelabUtilityMod
             }
             catch { }
 
-            // Keyboard fallback: spacebar or 'L' key
-            if (Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.L))
-            {
-                triggerPressed = true;
-                gripHeld = true; // bypass safety for keyboard
-            }
-
             // Update trajectory preview
             if (showTrajectory)
             {

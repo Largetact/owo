@@ -921,16 +921,14 @@ namespace BonelabUtilityMod
                 if (physRig == null) return;
 
                 // Save head rotation BEFORE ragdolling so we can restore it on un-ragdoll.
-                // During ragdoll, the head rb rotates freely with physics and drifts
-                // from its neutral orientation. Without saving/restoring, the head
-                // ends up tilted after un-ragdoll, which breaks dash aiming.
+                // NOTE: Disabled — restoring localRotation fights the ConfigurableJoint
+                // and causes jitter. Dash aiming is already fixed via Camera.main.transform.forward.
                 try
                 {
                     var headRb = physRig.torso?.rbHead;
                     if (headRb != null)
                     {
-                        _savedHeadLocalRotation = ((Component)headRb).transform.localRotation;
-                        _hasHeadRotationSaved = true;
+                        // No longer saving head rotation — joint handles it
                     }
                 }
                 catch { }
@@ -1035,39 +1033,77 @@ namespace BonelabUtilityMod
         public static void UnragdollPlayer(PhysicsRig physRig)
         {
             var pelvisTransform = ((Il2CppSLZ.Marrow.Rig)physRig).m_pelvis.GetComponent<Transform>();
-            physRig.TurnOnRig();
-            physRig.UnRagdollRig();
-            var pos = pelvisTransform.position;
-            var rot = pelvisTransform.rotation;
-            physRig.knee.transform.SetPositionAndRotation(pos, rot);
-            physRig.feet.transform.SetPositionAndRotation(pos, rot);
 
-            // Ensure head joint is fully restored to Locked so head tracks VR headset cleanly
+            // Zero out all rig rigidbody velocities BEFORE restoring the rig
+            // so joints don't inherit stale ragdoll momentum
             try
             {
-                var torso = physRig.torso;
-                if (torso != null && torso.rbHead != null)
+                var rbs = ((Component)physRig).gameObject.GetComponentsInChildren<Rigidbody>();
+                if (rbs != null)
                 {
-                    // Restore the head's pre-ragdoll local rotation.
-                    // During ragdoll the head rb rotates freely with physics and
-                    // ends up tilted. Locking the joint without resetting rotation
-                    // locks it at the drifted angle, causing dash to aim downward.
-                    if (_hasHeadRotationSaved)
+                    foreach (var rb in rbs)
                     {
-                        ((Component)torso.rbHead).transform.localRotation = _savedHeadLocalRotation;
-                        _hasHeadRotationSaved = false;
-                    }
-
-                    var headJoint = torso.rbHead.GetComponent<ConfigurableJoint>();
-                    if (headJoint != null)
-                    {
-                        headJoint.angularXMotion = ConfigurableJointMotion.Locked;
-                        headJoint.angularYMotion = ConfigurableJointMotion.Locked;
-                        headJoint.angularZMotion = ConfigurableJointMotion.Locked;
+                        if (rb != null)
+                        {
+                            rb.velocity = Vector3.zero;
+                            rb.angularVelocity = Vector3.zero;
+                        }
                     }
                 }
             }
             catch { }
+
+            physRig.TurnOnRig();
+            physRig.UnRagdollRig();
+
+            // Place feet at the ground surface below pelvis, knee halfway between.
+            // Raycast to find actual ground — blind offset can push locoball underground
+            // if the player ragdolled near the floor.
+            var pos = pelvisTransform.position;
+            var rot = pelvisTransform.rotation;
+
+            float groundY = pos.y - 1.0f; // fallback
+            RaycastHit hit;
+            if (Physics.Raycast(pos, Vector3.down, out hit, 3f))
+            {
+                groundY = hit.point.y;
+            }
+
+            // Small upward offset so the locoball sits ON the ground, not in it
+            float feetY = groundY + 0.05f;
+            float kneeY = pos.y - (pos.y - feetY) * 0.5f;
+
+            physRig.knee.transform.SetPositionAndRotation(new Vector3(pos.x, kneeY, pos.z), rot);
+            physRig.feet.transform.SetPositionAndRotation(new Vector3(pos.x, feetY, pos.z), rot);
+
+            // Zero velocities AGAIN after rig restore in case TurnOnRig/UnRagdollRig injected any
+            try
+            {
+                var rbs = ((Component)physRig).gameObject.GetComponentsInChildren<Rigidbody>();
+                if (rbs != null)
+                {
+                    foreach (var rb in rbs)
+                    {
+                        if (rb != null)
+                        {
+                            rb.velocity = Vector3.zero;
+                            rb.angularVelocity = Vector3.zero;
+                        }
+                    }
+                }
+            }
+            catch { }
+
+            // NOTE: Do NOT modify the head ConfigurableJoint here.
+            // TurnOnRig()/UnRagdollRig() already restores joints to their correct state.
+            // Overriding angularMotion to Locked breaks the head's spring-driven tracking
+            // of the VR headset, causing persistent avatar jitter.
+
+            // Prevent physics-based ragdoll from re-triggering immediately:
+            // reset tracked velocity so deltaV isn't huge on the first frame back,
+            // and set a cooldown window
+            _lastVelocity = Vector3.zero;
+            _nextRagdollTime = Time.time + COOLDOWN;
         }
 
         // ═══════════════════════════════════════════════════

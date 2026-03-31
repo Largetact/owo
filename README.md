@@ -1,6 +1,6 @@
 # OwO — Bonelab Utility Mod
 
-> v4.1.0 — A comprehensive MelonLoader utility mod for BONELAB.
+> v4.2.16 — A comprehensive MelonLoader utility mod for BONELAB.
 
 ---
 
@@ -15,7 +15,11 @@
 - **Ragdoll** — Full-body physics: grab-based (head/neck/arms/body) and physics-based (fall/impact/launch/slip/wall-push). ARM_CONTROL mode and death persistence.
 - **Force Grab** — Pull items from any distance. Supports instant/global modes, multi-item, player push/pull via Fusion.
 - **God Mode** — Health stays above 0. You still take damage but cannot die.
+- **Ghost Mode** — Makes you invisible to other players on the network.
 - **Auto Run** — Hold direction to auto-run.
+- **Anti-Ragdoll** — Detects and reverses forced ragdolling by other players.
+- **Anti-Slowmo** — Blocks forced time-scale changes from other players.
+- **Anti-Teleport** — Detects and reverts sudden forced teleportation.
 - **XYZ Scale** — Independently scale player X/Y/Z dimensions.
 - **Freeze Player** — Freeze other players in place.
 
@@ -25,6 +29,7 @@
 - **Explosive Punch** — 6 explosion types (Normal, Super, BlackFlash, Tiny, Boom, Custom). Separate left/right hand modes with SmashBone overlay and cosmetic effects.
 - **Spawn on Player** — Drop items on/above/below other players with launch force, homing, and count controls.
 - **Crazy Guns** — Glow, insane damage, no recoil, insane fire rate, no weight, bounce, no reload.
+- **Damage Multiplier** — Scale gun projectile and melee damage independently (0.1x–100x).
 - **Full Auto** — Convert any gun to full-auto (60–2000 RPM).
 - **Random Explode** — Spontaneous explosions at configurable intervals/chance. B+Y controller shortcut.
 - **Ground Slam** — Trigger explosions on high-velocity ground impact.
@@ -51,6 +56,11 @@
 
 - **Spawn Menu** — Browse and spawn items with search and pagination.
 - **Despawn All** — Clear items with filters (guns, melees, NPCs, network props, etc.) and auto-despawn timer.
+- **AI NPC Controls** — Manipulate NPC mental states, HP, and mass on held or all scene NPCs.
+- **Avatar Logger** — Tracks avatar changes across players with optional notifications.
+- **Lobby Browser** — Browse and join available Fusion lobbies.
+- **Player Action Logger** — Logs player joins, leaves, and deaths with Fusion event hooking.
+- **Spawn Logger** — Logs when items are spawned with optional notifications.
 - **Change Map** — Load levels by barcode with level search.
 - **Force Spawner** — Spawn items at proximity.
 - **Keybinds** — Rebindable keyboard shortcuts for God Mode, Dash/Flight targeting, Despawn, and menu toggles.
@@ -102,6 +112,7 @@ Individual features are also available as separate, lightweight mods:
 | **StandaloneRagdoll**        | Ragdoll physics system          |
 | **StandaloneObjectLauncher** | Object launcher                 |
 | **StandaloneBodyLogColor**   | Body Log color customization    |
+| **StandaloneSpoofing**       | SteamID/Username/Nick spoofing  |
 
 Each standalone mod has its own BoneMenu page and MelonPreferences.
 
@@ -170,9 +181,21 @@ BonelabUtilityMod/
 │   ├── AntiGrabController.cs
 │   ├── AntiGravityChangeController.cs
 │   ├── AntiKnockoutController.cs
+│   ├── AntiRagdollController.cs
+│   ├── AntiSlowmoController.cs
+│   ├── AntiTeleportController.cs
+│   ├── GhostModeController.cs
 │   ├── UnbreakableGripController.cs
 │   ├── FreezePlayerController.cs
 │   └── RemoveWindSFXController.cs
+│
+├── Monitoring
+│   ├── AvatarLoggerController.cs
+│   ├── PlayerActionLoggerController.cs
+│   ├── SpawnLoggerController.cs
+│   ├── LobbyBrowserController.cs
+│   ├── AINpcController.cs
+│   └── DamageMultiplierController.cs
 │
 ├── BonelabUtilityUpdater/           # Auto-update plugin
 │   ├── UpdaterPlugin.cs
@@ -182,7 +205,8 @@ BonelabUtilityMod/
 ├── StandaloneServerQueue/           # Standalone mods
 ├── StandaloneRagdoll/
 ├── StandaloneObjectLauncher/
-└── StandaloneBodyLogColor/
+├── StandaloneBodyLogColor/
+└── StandaloneSpoofing/
 ```
 
 ---
