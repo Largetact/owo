@@ -59,6 +59,7 @@ namespace BonelabUtilityMod
             get => _enabled;
             set
             {
+                if (_enabled == value) return;
                 _enabled = value;
                 if (!value)
                 {
@@ -75,6 +76,7 @@ namespace BonelabUtilityMod
             get => _instantMode;
             set
             {
+                if (_instantMode == value) return;
                 _instantMode = value;
                 Main.MelonLog.Msg($"Force Grab Mode: {(value ? "Instant" : "Fly")}");
             }

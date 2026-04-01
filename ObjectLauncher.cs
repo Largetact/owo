@@ -158,6 +158,7 @@ namespace BonelabUtilityMod
             get => fullAutoMode;
             set
             {
+                if (fullAutoMode == value) return;
                 fullAutoMode = value;
                 Main.MelonLog.Msg($"Fire mode: {(value ? "Full-Auto" : "Semi-Auto")}");
             }
@@ -190,6 +191,7 @@ namespace BonelabUtilityMod
             get => showTrajectory;
             set
             {
+                if (showTrajectory == value) return;
                 showTrajectory = value;
                 if (!value)
                 {
@@ -204,8 +206,9 @@ namespace BonelabUtilityMod
             get => projectileCount;
             set
             {
-                projectileCount = Mathf.Clamp(value, 1, 25);
-                Main.MelonLog.Msg($"Projectile count: {projectileCount}");
+                int clamped = Mathf.Clamp(value, 1, 25);
+                if (projectileCount == clamped) return;
+                projectileCount = clamped;
             }
         }
 
@@ -241,8 +244,9 @@ namespace BonelabUtilityMod
             get => spawnScale;
             set
             {
-                spawnScale = Mathf.Clamp(value, 0.1f, 10f);
-                Main.MelonLog.Msg($"Spawn scale: {spawnScale}");
+                float clamped = Mathf.Clamp(value, 0.1f, 10f);
+                if (spawnScale == clamped) return;
+                spawnScale = clamped;
             }
         }
 
@@ -251,6 +255,7 @@ namespace BonelabUtilityMod
             get => _homingEnabled;
             set
             {
+                if (_homingEnabled == value) return;
                 _homingEnabled = value;
                 if (!value) _homingProjectiles.Clear();
                 Main.MelonLog.Msg($"Homing: {(value ? "ON" : "OFF")}");
@@ -262,6 +267,7 @@ namespace BonelabUtilityMod
             get => _homingFilter;
             set
             {
+                if (_homingFilter == value) return;
                 _homingFilter = value;
                 Main.MelonLog.Msg($"Homing Filter: {value}");
             }
@@ -281,8 +287,9 @@ namespace BonelabUtilityMod
             get => _homingDuration;
             set
             {
-                _homingDuration = Mathf.Max(0f, value);
-                Main.MelonLog.Msg($"Homing Duration: {(value <= 0f ? "Unlimited" : $"{value:0.0}s")}");
+                float clamped = Mathf.Max(0f, value);
+                if (_homingDuration == clamped) return;
+                _homingDuration = clamped;
             }
         }
 
@@ -291,8 +298,8 @@ namespace BonelabUtilityMod
             get => _homingRotationLock;
             set
             {
+                if (_homingRotationLock == value) return;
                 _homingRotationLock = value;
-                Main.MelonLog.Msg($"Homing Rotation Lock: {(value ? "ON" : "OFF")}");
             }
         }
 
@@ -301,8 +308,9 @@ namespace BonelabUtilityMod
             get => _homingSpeed;
             set
             {
-                _homingSpeed = Mathf.Max(0f, value);
-                Main.MelonLog.Msg($"Homing Speed: {(value <= 0f ? "Auto" : $"{value:0.0}")}");
+                float clamped = Mathf.Max(0f, value);
+                if (_homingSpeed == clamped) return;
+                _homingSpeed = clamped;
             }
         }
 
@@ -311,8 +319,8 @@ namespace BonelabUtilityMod
             get => _homingAccelEnabled;
             set
             {
+                if (_homingAccelEnabled == value) return;
                 _homingAccelEnabled = value;
-                Main.MelonLog.Msg($"Homing Acceleration: {(value ? "ON" : "OFF")}");
             }
         }
 
@@ -330,8 +338,8 @@ namespace BonelabUtilityMod
             get => _homingTargetHead;
             set
             {
+                if (_homingTargetHead == value) return;
                 _homingTargetHead = value;
-                Main.MelonLog.Msg($"Homing Target: {(value ? "HEAD" : "TORSO")}");
             }
         }
 
@@ -340,8 +348,8 @@ namespace BonelabUtilityMod
             get => _homingMomentum;
             set
             {
+                if (_homingMomentum == value) return;
                 _homingMomentum = value;
-                Main.MelonLog.Msg($"Homing Momentum: {(value ? "ON" : "OFF")}");
             }
         }
 
@@ -356,8 +364,8 @@ namespace BonelabUtilityMod
             get => _aimRotationEnabled;
             set
             {
+                if (_aimRotationEnabled == value) return;
                 _aimRotationEnabled = value;
-                Main.MelonLog.Msg($"Aim Rotation: {(value ? "ON" : "OFF")}");
             }
         }
 
@@ -366,8 +374,8 @@ namespace BonelabUtilityMod
             get => _preActivateMenuTap;
             set
             {
+                if (_preActivateMenuTap == value) return;
                 _preActivateMenuTap = value;
-                Main.MelonLog.Msg($"Pre-Activate (Menu Tap): {(value ? "ON" : "OFF")}");
             }
         }
 
@@ -495,15 +503,9 @@ namespace BonelabUtilityMod
             get => launcherEnabled;
             set
             {
+                if (launcherEnabled == value) return;
                 launcherEnabled = value;
-                if (value)
-                {
-                    Main.MelonLog.Msg("Object Launcher ENABLED");
-                }
-                else
-                {
-                    Main.MelonLog.Msg("Object Launcher DISABLED");
-                }
+                Main.MelonLog.Msg($"Object Launcher {(value ? "ENABLED" : "DISABLED")}");
             }
         }
 

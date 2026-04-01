@@ -70,6 +70,7 @@ namespace BonelabUtilityMod
             get => dashEnabled;
             set
             {
+                if (dashEnabled == value) return;
                 dashEnabled = value;
                 Main.MelonLog.Msg($"Dash {(value ? "ENABLED" : "DISABLED")}");
             }

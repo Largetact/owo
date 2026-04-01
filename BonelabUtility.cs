@@ -85,7 +85,7 @@ namespace BonelabUtilityMod
         internal const string Name = "OwO";
         internal const string Description = "Bullshit Client for people with schizophrenia";
         internal const string Author = "XI";
-        internal const string Version = "4.4.0";
+        internal const string Version = "4.4.1";
 
         private static readonly string[] _emoticons = { "UwU", "QwQ", ".w.", "^w^", ";w;", "=w=", "-w-", "0w0", "7w7", "XwX" };
         private static int _emoticonIndex = 0;
@@ -3812,6 +3812,7 @@ namespace BonelabUtilityMod
             get => godModeEnabled;
             set
             {
+                if (godModeEnabled == value) return;
                 godModeEnabled = value;
                 if (value)
                 {
@@ -3976,6 +3977,7 @@ namespace BonelabUtilityMod
             get => _enabled;
             set
             {
+                if (_enabled == value) return;
                 _enabled = value;
                 if (value)
                 {
@@ -4074,6 +4076,7 @@ namespace BonelabUtilityMod
             get => _enabled;
             set
             {
+                if (_enabled == value) return;
                 _enabled = value;
                 if (value)
                 {

@@ -20,6 +20,7 @@ namespace BonelabUtilityMod
             get => _isEnabled;
             set
             {
+                if (_isEnabled == value) return;
                 _isEnabled = value;
                 Main.MelonLog.Msg($"Anti-Knockout: {(_isEnabled ? "ENABLED" : "DISABLED")}");
             }

@@ -7,7 +7,7 @@
     <RootNamespace>BonelabUtilityMod</RootNamespace>
     <LangVersion>latest</LangVersion>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <Version>4.4.0</Version>
+    <Version>4.4.1</Version>
   </PropertyGroup>
 
   <!-- Exclude standalone mods that have their own csproj -->

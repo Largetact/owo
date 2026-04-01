@@ -32,6 +32,7 @@ namespace BonelabUtilityMod
             get => _enabled;
             set
             {
+                if (_enabled == value) return;
                 if (!value) _totalSpinAngle = 0f;
                 _enabled = value;
                 Main.MelonLog.Msg($"Spinbot {(value ? "ON" : "OFF")} ({_speed}°/s {_direction})");

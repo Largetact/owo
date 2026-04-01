@@ -40,6 +40,26 @@ namespace BonelabUtilityMod
         private static string _bhopEffectSearchQuery = "";
         private static List<(string barcode, string title)> _bhopEffectSearchResults = new List<(string, string)>();
 
+        // Cosmetic barcode search states for combat features
+        private static string _epCosmeticSearchQuery = "";
+        private static List<(string barcode, string title)> _epCosmeticSearchResults = new List<(string, string)>();
+        private static string _epLeftCustomSearchQuery = "";
+        private static List<(string barcode, string title)> _epLeftCustomSearchResults = new List<(string, string)>();
+        private static string _epLeftCosSearchQuery = "";
+        private static List<(string barcode, string title)> _epLeftCosSearchResults = new List<(string, string)>();
+        private static string _epRightCustomSearchQuery = "";
+        private static List<(string barcode, string title)> _epRightCustomSearchResults = new List<(string, string)>();
+        private static string _epRightCosSearchQuery = "";
+        private static List<(string barcode, string title)> _epRightCosSearchResults = new List<(string, string)>();
+        private static string _gsCosmeticSearchQuery = "";
+        private static List<(string barcode, string title)> _gsCosmeticSearchResults = new List<(string, string)>();
+        private static string _eiCosmeticSearchQuery = "";
+        private static List<(string barcode, string title)> _eiCosmeticSearchResults = new List<(string, string)>();
+        private static string _dashCosmeticSearchQuery = "";
+        private static List<(string barcode, string title)> _dashCosmeticSearchResults = new List<(string, string)>();
+        private static string _flightCosmeticSearchQuery = "";
+        private static List<(string barcode, string title)> _flightCosmeticSearchResults = new List<(string, string)>();
+
         // Spoofing text input buffers
         private static string _spoofUsernameInput = "Player";
         private static string _spoofNicknameInput = "";
@@ -929,6 +949,8 @@ namespace BonelabUtilityMod
 
                 y = DrawSpawnableSearch("Search Dash Effect", ref _dashSearchQuery, _dashSearchResults,
                     (barcode, title) => { DashController.EffectBarcode = barcode; }, y, w);
+                y = DrawSpawnableSearch("Search Dash Cosmetic", ref _dashCosmeticSearchQuery, _dashCosmeticSearchResults,
+                    (barcode, title) => { DashController.CosmeticBarcode = barcode; }, y, w);
 
                 float dSpawnDelay = DashController.EffectSpawnDelay;
                 y = Slider("Effect Spawn Delay", ref dSpawnDelay, 0f, 2f, y, w, "F2");
@@ -1040,6 +1062,8 @@ namespace BonelabUtilityMod
 
                 y = DrawSpawnableSearch("Search Flight Effect", ref _flightSearchQuery, _flightSearchResults,
                     (barcode, title) => { FlightController.EffectBarcode = barcode; }, y, w);
+                y = DrawSpawnableSearch("Search Flight Cosmetic", ref _flightCosmeticSearchQuery, _flightCosmeticSearchResults,
+                    (barcode, title) => { FlightController.CosmeticBarcode = barcode; }, y, w);
 
                 bool fHandOr = FlightController.EffectHandOriented;
                 y = Toggle(ref fHandOr, "Effect Hand Oriented", y, w);
@@ -1502,6 +1526,8 @@ namespace BonelabUtilityMod
                 y = Label("Cosmetic Barcode: " + (string.IsNullOrEmpty(ExplosivePunchController.CosmeticBarcode) ? "(none)" : ExplosivePunchController.CosmeticBarcode), y, w);
                 y = DrawSpawnableSearch("Search Custom Punch", ref _explosivePunchSearchQuery, _explosivePunchSearchResults,
                     (barcode, title) => { ExplosivePunchController.CustomPunchBarcode = barcode; }, y, w);
+                y = DrawSpawnableSearch("Search Punch Cosmetic", ref _epCosmeticSearchQuery, _epCosmeticSearchResults,
+                    (barcode, title) => { ExplosivePunchController.CosmeticBarcode = barcode; }, y, w);
 
                 // ── Per-Hand (SEPARATE mode) ──
                 if (ExplosivePunchController.PunchMode == PunchHandMode.SEPARATE)
@@ -1514,6 +1540,8 @@ namespace BonelabUtilityMod
                     ExplosivePunchController.LeftExplosionType = epLeftType;
 
                     y = Label("Left Custom: " + (string.IsNullOrEmpty(ExplosivePunchController.LeftCustomBarcode) ? "(none)" : ExplosivePunchController.LeftCustomBarcode), y, w);
+                    y = DrawSpawnableSearch("Search Left Custom", ref _epLeftCustomSearchQuery, _epLeftCustomSearchResults,
+                        (barcode, title) => { ExplosivePunchController.LeftCustomBarcode = barcode; }, y, w);
 
                     bool epLSb = ExplosivePunchController.LeftSmashBoneEnabled;
                     y = Toggle(ref epLSb, "SmashBone", y, w);
@@ -1532,6 +1560,8 @@ namespace BonelabUtilityMod
                     ExplosivePunchController.LeftCosmeticEnabled = epLCos;
 
                     y = Label("Left Cosmetic: " + (string.IsNullOrEmpty(ExplosivePunchController.LeftCosmeticBarcode) ? "(none)" : ExplosivePunchController.LeftCosmeticBarcode), y, w);
+                    y = DrawSpawnableSearch("Search Left Cosmetic", ref _epLeftCosSearchQuery, _epLeftCosSearchResults,
+                        (barcode, title) => { ExplosivePunchController.LeftCosmeticBarcode = barcode; }, y, w);
 
                     float epLCosC = ExplosivePunchController.LeftCosmeticCount;
                     y = Slider("Cosmetic Count", ref epLCosC, 1f, 25f, y, w, "F0");
@@ -1549,6 +1579,8 @@ namespace BonelabUtilityMod
                     ExplosivePunchController.RightExplosionType = epRightType;
 
                     y = Label("Right Custom: " + (string.IsNullOrEmpty(ExplosivePunchController.RightCustomBarcode) ? "(none)" : ExplosivePunchController.RightCustomBarcode), y, w);
+                    y = DrawSpawnableSearch("Search Right Custom", ref _epRightCustomSearchQuery, _epRightCustomSearchResults,
+                        (barcode, title) => { ExplosivePunchController.RightCustomBarcode = barcode; }, y, w);
 
                     bool epRSb = ExplosivePunchController.RightSmashBoneEnabled;
                     y = Toggle(ref epRSb, "SmashBone", y, w);
@@ -1567,6 +1599,8 @@ namespace BonelabUtilityMod
                     ExplosivePunchController.RightCosmeticEnabled = epRCos;
 
                     y = Label("Right Cosmetic: " + (string.IsNullOrEmpty(ExplosivePunchController.RightCosmeticBarcode) ? "(none)" : ExplosivePunchController.RightCosmeticBarcode), y, w);
+                    y = DrawSpawnableSearch("Search Right Cosmetic", ref _epRightCosSearchQuery, _epRightCosSearchResults,
+                        (barcode, title) => { ExplosivePunchController.RightCosmeticBarcode = barcode; }, y, w);
 
                     float epRCosC = ExplosivePunchController.RightCosmeticCount;
                     y = Slider("Cosmetic Count", ref epRCosC, 1f, 25f, y, w, "F0");
@@ -1577,9 +1611,12 @@ namespace BonelabUtilityMod
                     ExplosivePunchController.RightCosmeticFlip = epRCosF;
                 }
 
-                // ── Ground Slam ──
-                y = Gap(y, 20f);
-                y = Header("═══ GROUND SLAM ═══", y, w);
+            }
+
+            y = Gap(y, 10f);
+            y = CollapsibleHeader("GROUND SLAM", ref _combatGroundSlam, y, w);
+            if (_combatGroundSlam)
+            {
 
                 bool gs1 = GroundPoundController.Enabled;
                 y = Toggle(ref gs1, "Enabled", y, w);
@@ -1642,6 +1679,8 @@ namespace BonelabUtilityMod
 
                 y = DrawSpawnableSearch("Search Custom Slam", ref _groundSlamSearchQuery, _groundSlamSearchResults,
                     (barcode, title) => { GroundPoundController.CustomBarcode = barcode; }, y, w);
+                y = DrawSpawnableSearch("Search Slam Cosmetic", ref _gsCosmeticSearchQuery, _gsCosmeticSearchResults,
+                    (barcode, title) => { GroundPoundController.CosmeticBarcode = barcode; }, y, w);
             }
 
             y = Gap(y, 10f);
@@ -1710,6 +1749,8 @@ namespace BonelabUtilityMod
 
                 y = DrawSpawnableSearch("Search Custom Impact", ref _expImpactSearchQuery, _expImpactSearchResults,
                     (barcode, title) => { ExplosiveImpactController.CustomBarcode = barcode; }, y, w);
+                y = DrawSpawnableSearch("Search Impact Cosmetic", ref _eiCosmeticSearchQuery, _eiCosmeticSearchResults,
+                    (barcode, title) => { ExplosiveImpactController.CosmeticBarcode = barcode; }, y, w);
             }
 
             y = Gap(y, 10f);

@@ -153,8 +153,9 @@ namespace BonelabUtilityMod
             get => _spawnScale;
             set
             {
-                _spawnScale = Mathf.Clamp(value, 0.1f, 10f);
-                Main.MelonLog.Msg($"[WaypointProj] Spawn scale: {_spawnScale}");
+                float clamped = Mathf.Clamp(value, 0.1f, 10f);
+                if (_spawnScale == clamped) return;
+                _spawnScale = clamped;
             }
         }
 

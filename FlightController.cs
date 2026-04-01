@@ -84,6 +84,7 @@ namespace BonelabUtilityMod
             get => _enabled;
             set
             {
+                if (_enabled == value) return;
                 bool wasEnabled = _enabled;
                 _enabled = value;
                 if (!value && wasEnabled)

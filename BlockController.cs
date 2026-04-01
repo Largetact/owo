@@ -62,6 +62,7 @@ namespace BonelabUtilityMod
             get => _playerBlockEnabled;
             set
             {
+                if (_playerBlockEnabled == value) return;
                 _playerBlockEnabled = value;
                 Main.MelonLog.Msg($"Player Block {(value ? "ENABLED" : "DISABLED")}");
             }
@@ -72,6 +73,7 @@ namespace BonelabUtilityMod
             get => _itemBlockEnabled;
             set
             {
+                if (_itemBlockEnabled == value) return;
                 _itemBlockEnabled = value;
                 Main.MelonLog.Msg($"Item Block {(value ? "ENABLED" : "DISABLED")}");
             }
@@ -82,6 +84,7 @@ namespace BonelabUtilityMod
             get => _localBlockEnabled;
             set
             {
+                if (_localBlockEnabled == value) return;
                 _localBlockEnabled = value;
                 Main.MelonLog.Msg($"Local Block {(value ? "ENABLED" : "DISABLED")}");
             }

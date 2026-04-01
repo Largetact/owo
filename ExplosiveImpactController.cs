@@ -66,6 +66,7 @@ namespace BonelabUtilityMod
             get => _enabled;
             set
             {
+                if (_enabled == value) return;
                 _enabled = value;
                 Main.MelonLog.Msg($"Explosive Impact {(value ? "ENABLED" : "DISABLED")}");
             }

@@ -63,6 +63,7 @@ namespace BonelabUtilityMod
             get => _filter;
             set
             {
+                if (_filter == value) return;
                 _filter = value;
                 Main.MelonLog.Msg($"Despawn filter set to: {value}");
             }
@@ -73,6 +74,7 @@ namespace BonelabUtilityMod
             get => _autoDespawnEnabled;
             set
             {
+                if (_autoDespawnEnabled == value) return;
                 _autoDespawnEnabled = value;
                 Main.MelonLog.Msg($"Auto-Despawn {(value ? "ENABLED" : "DISABLED")}");
                 if (value)
@@ -87,9 +89,10 @@ namespace BonelabUtilityMod
             get => _autoDespawnIntervalMins;
             set
             {
-                _autoDespawnIntervalMins = Mathf.Clamp(value, 0f, 60f);
+                float clamped = Mathf.Clamp(value, 0f, 60f);
+                if (_autoDespawnIntervalMins == clamped) return;
+                _autoDespawnIntervalMins = clamped;
                 Main.MelonLog.Msg($"Auto-Despawn interval set to {_autoDespawnIntervalMins} min");
-                // Restart timer with new interval if running
                 if (_autoDespawnEnabled)
                 {
                     StopTimer();
