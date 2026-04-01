@@ -85,7 +85,7 @@ namespace BonelabUtilityMod
         internal const string Name = "OwO";
         internal const string Description = "Bullshit Client for people with schizophrenia";
         internal const string Author = "XI";
-        internal const string Version = "4.3.0";
+        internal const string Version = "4.4.0";
 
         private static readonly string[] _emoticons = { "UwU", "QwQ", ".w.", "^w^", ";w;", "=w=", "-w-", "0w0", "7w7", "XwX" };
         private static int _emoticonIndex = 0;
@@ -642,7 +642,6 @@ namespace BonelabUtilityMod
             BodyLogColorController.Update();
             KeybindManager.Update();
             BlockController.Update();
-            GravityBootsController.Update();
             FreezePlayerController.Update();
             HolsterHiderController.Update();
             ScreenShareController.Update();
@@ -1253,39 +1252,6 @@ namespace BonelabUtilityMod
                     Color.green,
                     SpinbotController.Direction,
                     (value) => { SpinbotController.Direction = (SpinDirection)value; SettingsManager.MarkDirty(); }
-                );
-
-                // ── Gravity Boots submenu inside Player ──
-                var gravBootsPage = playerPage.CreatePage("Gravity Boots", Color.green);
-                gravBootsPage.CreateBool(
-                    "Enabled",
-                    Color.green,
-                    GravityBootsController.Enabled,
-                    (value) => { GravityBootsController.Enabled = value; SettingsManager.MarkDirty(); }
-                );
-                gravBootsPage.CreateFloat(
-                    "Gravity Strength",
-                    Color.cyan,
-                    GravityBootsController.GravityStrength, 1f, 1f, 30f,
-                    (value) => { GravityBootsController.GravityStrength = value; SettingsManager.MarkDirty(); }
-                );
-                gravBootsPage.CreateFloat(
-                    "Surface Detect Range",
-                    Color.yellow,
-                    GravityBootsController.SurfaceDetectRange, 0.5f, 1f, 10f,
-                    (value) => { GravityBootsController.SurfaceDetectRange = value; SettingsManager.MarkDirty(); }
-                );
-                gravBootsPage.CreateFloat(
-                    "Rotation Speed",
-                    Color.white,
-                    GravityBootsController.RotationSpeed, 1f, 1f, 20f,
-                    (value) => { GravityBootsController.RotationSpeed = value; SettingsManager.MarkDirty(); }
-                );
-                gravBootsPage.CreateFloat(
-                    "Stick Force",
-                    Color.magenta,
-                    GravityBootsController.StickForce, 5f, 5f, 50f,
-                    (value) => { GravityBootsController.StickForce = value; SettingsManager.MarkDirty(); }
                 );
 
                 // Ragdoll submenu inside Player

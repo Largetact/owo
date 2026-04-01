@@ -41,24 +41,15 @@ namespace BonelabUtilityMod
                 // If our own ragdoll system is enabled, don't interfere (user intentionally ragdolling)
                 if (RagdollController.Enabled) return;
 
-                // Check if the physics rig is in ragdoll state not initiated by us
-                // The rig's "turnedOn" property: false = ragdolled, true = normal
-                bool rigOn = true;
-                try
-                {
-                    var turnedOnField = rigManager.physicsRig.GetType().GetField("turningOn",
-                        System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
-                    if (turnedOnField != null)
-                        rigOn = (bool)turnedOnField.GetValue(rigManager.physicsRig);
-                }
-                catch { }
+                var physRig = rigManager.physicsRig;
 
-                if (!rigOn)
+                // torso.shutdown == true means the rig is ragdolled
+                if (physRig.torso != null && physRig.torso.shutdown)
                 {
                     // We're ragdolled but NOT by our own system — force un-ragdoll
                     try
                     {
-                        RagdollController.UnragdollPlayer(rigManager.physicsRig);
+                        RagdollController.UnragdollPlayer(physRig);
                     }
                     catch { }
 

@@ -28,6 +28,10 @@ namespace BonelabUtilityMod
         private static bool _trimpEnabled = true;        // TF2-style trimp: hop off ramps to convert speed to height
         private static float _trimpMultiplier = 1.0f;    // how aggressively horizontal speed converts to vertical
 
+        // ───── Jump Effect ─────
+        private static bool _jumpEffectEnabled = false;
+        private static string _jumpEffectBarcode = "";
+
         // ───── Internal State ─────
         private static PhysGrounder _grounder;
         private static bool _wasGrounded = true;
@@ -59,6 +63,8 @@ namespace BonelabUtilityMod
         public static float StandableNormal { get => _standableNormal; set => _standableNormal = Mathf.Clamp(value, 0f, 1f); }
         public static bool TrimpEnabled { get => _trimpEnabled; set => _trimpEnabled = value; }
         public static float TrimpMultiplier { get => _trimpMultiplier; set => _trimpMultiplier = Mathf.Clamp(value, 0f, 3f); }
+        public static bool JumpEffectEnabled { get => _jumpEffectEnabled; set => _jumpEffectEnabled = value; }
+        public static string JumpEffectBarcode { get => _jumpEffectBarcode; set => _jumpEffectBarcode = value ?? ""; }
 
         public static void OnLevelUnloaded()
         {
@@ -330,6 +336,18 @@ namespace BonelabUtilityMod
                     {
                         rb.velocity = hopVelocity;
                     }
+                }
+
+                // Spawn jump effect at feet position
+                if (_jumpEffectEnabled && !string.IsNullOrEmpty(_jumpEffectBarcode))
+                {
+                    try
+                    {
+                        var feet = physRig.feet;
+                        if (feet != null)
+                            ExplosivePunchController.SpawnEffect(_jumpEffectBarcode, feet.transform.position, Quaternion.identity);
+                    }
+                    catch { }
                 }
             }
             catch { }

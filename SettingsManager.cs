@@ -188,7 +188,7 @@ namespace BonelabUtilityMod
             // Fixed section order for readability
             string[] orderedSections =
             {
-                "Global", "Player", "Combat", "GunModifier", "Dash", "Flight", "GravityBoots", "Ragdoll", "ExplosivePunch", "GroundPound",
+                "Global", "Player", "Combat", "GunModifier", "Dash", "Flight", "Ragdoll", "ExplosivePunch", "GroundPound",
                 "ExplosiveImpact", "DespawnAll", "ObjectLauncher", "ForceGrab",
                 "WaypointProjectile", "DropOnPlayer", "ServerQueue",
                 "BodyLogColor", "ScreenShare", "Keybinds", "CosmeticPresets", "Favorites",
@@ -435,15 +435,6 @@ namespace BonelabUtilityMod
                 FlightController.EffectMatrixSpacing = GetFloat("Flight", "EffectMatrixSpacing", 0.5f);
                 FlightController.EffectMatrixMode = (MatrixMode)GetInt("Flight", "EffectMatrixMode", (int)MatrixMode.SQUARE);
             }, "Load Flight");
-
-            SafeExecute(() =>
-            {
-                GravityBootsController.Enabled = GetBool("GravityBoots", "Enabled", false);
-                GravityBootsController.GravityStrength = GetFloat("GravityBoots", "GravityStrength", 9.81f);
-                GravityBootsController.SurfaceDetectRange = GetFloat("GravityBoots", "SurfaceDetectRange", 3f);
-                GravityBootsController.RotationSpeed = GetFloat("GravityBoots", "RotationSpeed", 5f);
-                GravityBootsController.StickForce = GetFloat("GravityBoots", "StickForce", 20f);
-            }, "Load Gravity Boots");
 
             SafeExecute(() =>
             {
@@ -813,6 +804,8 @@ namespace BonelabUtilityMod
                 BunnyHopController.StandableNormal = GetFloat("BunnyHop", "StandableNormal", 0.7f);
                 BunnyHopController.TrimpEnabled = GetBool("BunnyHop", "TrimpEnabled", true);
                 BunnyHopController.TrimpMultiplier = GetFloat("BunnyHop", "TrimpMultiplier", 1.0f);
+                BunnyHopController.JumpEffectEnabled = GetBool("BunnyHop", "JumpEffectEnabled", false);
+                BunnyHopController.JumpEffectBarcode = GetValue("BunnyHop", "JumpEffectBarcode", "");
             }, "Load BunnyHop");
 
             SafeExecute(() =>
@@ -1033,15 +1026,6 @@ namespace BonelabUtilityMod
                 SetFloat("Flight", "EffectMatrixSpacing", FlightController.EffectMatrixSpacing);
                 SetInt("Flight", "EffectMatrixMode", (int)FlightController.EffectMatrixMode);
             }, "Save Flight");
-
-            SafeExecute(() =>
-            {
-                SetBool("GravityBoots", "Enabled", GravityBootsController.Enabled);
-                SetFloat("GravityBoots", "GravityStrength", GravityBootsController.GravityStrength);
-                SetFloat("GravityBoots", "SurfaceDetectRange", GravityBootsController.SurfaceDetectRange);
-                SetFloat("GravityBoots", "RotationSpeed", GravityBootsController.RotationSpeed);
-                SetFloat("GravityBoots", "StickForce", GravityBootsController.StickForce);
-            }, "Save Gravity Boots");
 
             SafeExecute(() =>
             {
@@ -1403,6 +1387,8 @@ namespace BonelabUtilityMod
                 SetFloat("BunnyHop", "StandableNormal", BunnyHopController.StandableNormal);
                 SetBool("BunnyHop", "TrimpEnabled", BunnyHopController.TrimpEnabled);
                 SetFloat("BunnyHop", "TrimpMultiplier", BunnyHopController.TrimpMultiplier);
+                SetBool("BunnyHop", "JumpEffectEnabled", BunnyHopController.JumpEffectEnabled);
+                SetValue("BunnyHop", "JumpEffectBarcode", BunnyHopController.JumpEffectBarcode);
             }, "Save BunnyHop");
 
             SafeExecute(() =>

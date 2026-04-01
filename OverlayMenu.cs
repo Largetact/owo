@@ -14,18 +14,31 @@ namespace BonelabUtilityMod
 
         // Avatar search state
         private static string _avatarSearchQuery = "";
+        private static string _prevAvatarSearchQuery = "";
+        private static int _avatarSearchPage = 0;
+        private const int AVATAR_ITEMS_PER_PAGE = 10;
 
         // Spawnable search states for various pages
         private static string _launcherSearchQuery = "";
         private static string _spawnOnPlayerSearchQuery = "";
         private static string _waypointSearchQuery = "";
         private static string _explosivePunchSearchQuery = "";
+        private static string _groundSlamSearchQuery = "";
+        private static string _dashSearchQuery = "";
+        private static string _flightSearchQuery = "";
+        private static string _expImpactSearchQuery = "";
         private static List<(string barcode, string title)> _launcherSearchResults = new List<(string, string)>();
         private static List<(string barcode, string title)> _spawnOnPlayerSearchResults = new List<(string, string)>();
         private static List<(string barcode, string title)> _waypointSearchResults = new List<(string, string)>();
         private static List<(string barcode, string title)> _explosivePunchSearchResults = new List<(string, string)>();
+        private static List<(string barcode, string title)> _groundSlamSearchResults = new List<(string, string)>();
+        private static List<(string barcode, string title)> _dashSearchResults = new List<(string, string)>();
+        private static List<(string barcode, string title)> _flightSearchResults = new List<(string, string)>();
+        private static List<(string barcode, string title)> _expImpactSearchResults = new List<(string, string)>();
         private static string _randExplodeSearchQuery = "";
         private static List<(string barcode, string title)> _randExplodeSearchResults = new List<(string, string)>();
+        private static string _bhopEffectSearchQuery = "";
+        private static List<(string barcode, string title)> _bhopEffectSearchResults = new List<(string, string)>();
 
         // Spoofing text input buffers
         private static string _spoofUsernameInput = "Player";
@@ -63,12 +76,10 @@ namespace BonelabUtilityMod
         private static bool _playerRagdoll = false;
         private static bool _playerSpinbot = false;
         private static bool _playerBunnyHop = false;
-        private static bool _playerGravBoots = false;
         private static bool _playerAntiConstraint = false;
         private static bool _playerAntiKnockout = false;
         private static bool _playerUnbreakGrip = false;
         private static bool _playerAntiGravChange = false;
-        private static bool _playerStare = false;
         private static bool _playerForceGrab = false;
         private static bool _playerAutoRun = false;
         private static bool _playerDefaultWorld = false;
@@ -113,6 +124,7 @@ namespace BonelabUtilityMod
         // Cosmetics page collapsible sections
         private static bool _cosWeepingAngel = false;
         private static bool _cosAvatarCopier = false;
+        private static int _acPlayerPage = 0;
         private static bool _cosBodyLogColor = false;
 
         // Network page collapsible sections
@@ -120,6 +132,7 @@ namespace BonelabUtilityMod
         private static bool _netServerQueue = false;
         private static bool _netServerSettings = false;
         private static bool _netFreezePlayer = false;
+        private static int _fpPlayerPage = 0;
         private static bool _netBlockSystem = false;
         private static bool _netScreenShare = false;
         private static bool _netPlayerInfo = false;
@@ -737,12 +750,10 @@ namespace BonelabUtilityMod
             ("Dash", "dash speed teleport movement lock-on", 0, "DASH"),
             ("Flight", "fly flight hover soar", 0, "FLIGHT"),
             ("Ragdoll", "ragdoll fall flop physics tantrum", 0, "RAGDOLL"),
-            ("Gravity Boots", "gravity boots wall walk ceiling", 0, "GRAVITY BOOTS"),
             ("Anti-Constraint", "constraint stuck joints break", 0, "ANTI-CONSTRAINT"),
             ("Anti-Knockout", "knockout unconscious stun wake", 0, "ANTI-KNOCKOUT"),
             ("Unbreakable Grip", "grip hold grab strength unbreakable", 0, "UNBREAKABLE GRIP"),
             ("Anti-Gravity Change", "gravity lock earth loop", 0, "ANTI-GRAVITY CHANGE"),
-            ("Stare At Player", "stare look target npc turn", 0, "STARE AT PLAYER"),
             ("Force Grab", "force grab telekinesis pull push", 0, "FORCE GRAB"),
             ("Auto Run", "auto run walk movement", 0, "AUTO RUN"),
             ("Default World", "default world level map startup", 0, "DEFAULT WORLD"),
@@ -916,6 +927,9 @@ namespace BonelabUtilityMod
                 y = Label("Effect Barcode: " + (string.IsNullOrEmpty(DashController.EffectBarcode) ? "(none)" : DashController.EffectBarcode), y, w);
                 y = Label("Cosmetic Barcode: " + (string.IsNullOrEmpty(DashController.CosmeticBarcode) ? "(none)" : DashController.CosmeticBarcode), y, w);
 
+                y = DrawSpawnableSearch("Search Dash Effect", ref _dashSearchQuery, _dashSearchResults,
+                    (barcode, title) => { DashController.EffectBarcode = barcode; }, y, w);
+
                 float dSpawnDelay = DashController.EffectSpawnDelay;
                 y = Slider("Effect Spawn Delay", ref dSpawnDelay, 0f, 2f, y, w, "F2");
                 DashController.EffectSpawnDelay = dSpawnDelay;
@@ -1023,6 +1037,9 @@ namespace BonelabUtilityMod
 
                 y = Label("Effect Barcode: " + (string.IsNullOrEmpty(FlightController.EffectBarcode) ? "(none)" : FlightController.EffectBarcode), y, w);
                 y = Label("Cosmetic Barcode: " + (string.IsNullOrEmpty(FlightController.CosmeticBarcode) ? "(none)" : FlightController.CosmeticBarcode), y, w);
+
+                y = DrawSpawnableSearch("Search Flight Effect", ref _flightSearchQuery, _flightSearchResults,
+                    (barcode, title) => { FlightController.EffectBarcode = barcode; }, y, w);
 
                 bool fHandOr = FlightController.EffectHandOriented;
                 y = Toggle(ref fHandOr, "Effect Hand Oriented", y, w);
@@ -1203,6 +1220,14 @@ namespace BonelabUtilityMod
                 float bhTrimpMul = BunnyHopController.TrimpMultiplier;
                 y = Slider("Trimp Multiplier", ref bhTrimpMul, 0f, 3f, y, w, "F2");
                 BunnyHopController.TrimpMultiplier = bhTrimpMul;
+
+                bool bhFx = BunnyHopController.JumpEffectEnabled;
+                y = Toggle(ref bhFx, "Jump Effect", y, w);
+                BunnyHopController.JumpEffectEnabled = bhFx;
+
+                y = Label("Effect Barcode: " + (string.IsNullOrEmpty(BunnyHopController.JumpEffectBarcode) ? "(none)" : BunnyHopController.JumpEffectBarcode), y, w);
+                y = DrawSpawnableSearch("Search Jump Effect", ref _bhopEffectSearchQuery, _bhopEffectSearchResults,
+                    (barcode, title) => { BunnyHopController.JumpEffectBarcode = barcode; }, y, w);
             }
 
             y = Gap(y, 10f);
@@ -1220,32 +1245,6 @@ namespace BonelabUtilityMod
                 SpinDirection sbDir = SpinbotController.Direction;
                 y = EnumCycle("Direction", ref sbDir, y, w);
                 SpinbotController.Direction = sbDir;
-            }
-
-            y = Gap(y, 10f);
-            y = CollapsibleHeader("GRAVITY BOOTS", ref _playerGravBoots, y, w);
-            if (_playerGravBoots)
-            {
-
-                bool gb = GravityBootsController.Enabled;
-                y = Toggle(ref gb, "Enabled", y, w);
-                GravityBootsController.Enabled = gb;
-
-                float gbStr = GravityBootsController.GravityStrength;
-                y = Slider("Gravity Strength", ref gbStr, 1f, 30f, y, w);
-                GravityBootsController.GravityStrength = gbStr;
-
-                float gbDet = GravityBootsController.SurfaceDetectRange;
-                y = Slider("Surface Detect Range", ref gbDet, 1f, 10f, y, w);
-                GravityBootsController.SurfaceDetectRange = gbDet;
-
-                float gbRot = GravityBootsController.RotationSpeed;
-                y = Slider("Rotation Speed", ref gbRot, 1f, 20f, y, w);
-                GravityBootsController.RotationSpeed = gbRot;
-
-                float gbStk = GravityBootsController.StickForce;
-                y = Slider("Stick Force", ref gbStk, 5f, 50f, y, w);
-                GravityBootsController.StickForce = gbStk;
             }
 
             y = Gap(y, 10f);
@@ -1288,22 +1287,6 @@ namespace BonelabUtilityMod
                 bool agc = AntiGravityChangeController.Enabled;
                 y = Toggle(ref agc, "Earth Loop (Lock Gravity)", y, w);
                 AntiGravityChangeController.Enabled = agc;
-            }
-
-            y = Gap(y, 10f);
-            y = CollapsibleHeader("STARE AT PLAYER", ref _playerStare, y, w);
-            if (_playerStare)
-            {
-
-                bool stare = StareAtPlayerController.Enabled;
-                y = Toggle(ref stare, "Enabled", y, w);
-                StareAtPlayerController.Enabled = stare;
-
-                float stareSpd = StareAtPlayerController.TurnSpeed;
-                y = Slider("Turn Speed", ref stareSpd, 1f, 50f, y, w);
-                StareAtPlayerController.TurnSpeed = stareSpd;
-
-                y = Label("Target: " + StareAtPlayerController.TargetName, y, w);
             }
 
             y = Gap(y, 10f);
@@ -1656,6 +1639,9 @@ namespace BonelabUtilityMod
 
                 y = Label("Custom Barcode: " + (string.IsNullOrEmpty(GroundPoundController.CustomBarcode) ? "(none)" : GroundPoundController.CustomBarcode), y, w);
                 y = Label("Cosmetic Barcode: " + (string.IsNullOrEmpty(GroundPoundController.CosmeticBarcode) ? "(none)" : GroundPoundController.CosmeticBarcode), y, w);
+
+                y = DrawSpawnableSearch("Search Custom Slam", ref _groundSlamSearchQuery, _groundSlamSearchResults,
+                    (barcode, title) => { GroundPoundController.CustomBarcode = barcode; }, y, w);
             }
 
             y = Gap(y, 10f);
@@ -1721,6 +1707,9 @@ namespace BonelabUtilityMod
 
                 y = Label("Custom Barcode: " + (string.IsNullOrEmpty(ExplosiveImpactController.CustomBarcode) ? "(none)" : ExplosiveImpactController.CustomBarcode), y, w);
                 y = Label("Cosmetic Barcode: " + (string.IsNullOrEmpty(ExplosiveImpactController.CosmeticBarcode) ? "(none)" : ExplosiveImpactController.CosmeticBarcode), y, w);
+
+                y = DrawSpawnableSearch("Search Custom Impact", ref _expImpactSearchQuery, _expImpactSearchResults,
+                    (barcode, title) => { ExplosiveImpactController.CustomBarcode = barcode; }, y, w);
             }
 
             y = Gap(y, 10f);
@@ -2299,18 +2288,40 @@ namespace BonelabUtilityMod
                 y = Toggle(ref acpC, "Copy Cosmetics", y, w);
                 AvatarCopierController.CopyCosmetics = acpC;
 
-                y = Label("Current: " + AvatarCopierController.CurrentPlayerName, y, w);
-                y = Label("Avatar: " + AvatarCopierController.CurrentAvatarTitle, y, w);
                 y = Label(AvatarCopierController.LastCopiedInfo, y, w);
+                y = Button("Refresh Players", y, 200f, 28f, () => AvatarCopierController.RefreshPlayerList());
 
-                float acHalf = (w - 10f) / 3f;
-                if (GUI.Button(new Rect(PAD, y, acHalf, ROW), "< Prev", _cachedButtonStyle))
-                    AvatarCopierController.PreviousPlayer();
-                if (GUI.Button(new Rect(PAD + acHalf + 5f, y, acHalf, ROW), "Copy", _cachedButtonStyle))
-                    AvatarCopierController.CopySelectedAvatar();
-                if (GUI.Button(new Rect(PAD + (acHalf + 5f) * 2f, y, acHalf, ROW), "Next >", _cachedButtonStyle))
-                    AvatarCopierController.NextPlayer();
-                y += ROW + 4f;
+                var acPlayers = AvatarCopierController.Players;
+                if (acPlayers.Count > 0)
+                {
+                    int acTotalPages = (acPlayers.Count + AVATAR_ITEMS_PER_PAGE - 1) / AVATAR_ITEMS_PER_PAGE;
+                    _acPlayerPage = Math.Clamp(_acPlayerPage, 0, acTotalPages - 1);
+                    int acStart = _acPlayerPage * AVATAR_ITEMS_PER_PAGE;
+                    int acEnd = Math.Min(acStart + AVATAR_ITEMS_PER_PAGE, acPlayers.Count);
+
+                    y = Section($"Players: {acPlayers.Count} | Page {_acPlayerPage + 1}/{acTotalPages}", y, w);
+
+                    for (int i = acStart; i < acEnd; i++)
+                    {
+                        int idx = i;
+                        var p = acPlayers[i];
+                        GUI.Label(new Rect(PAD, y, w - 90f, ROW), $"{p.DisplayName} ({p.AvatarTitle})", _cachedLabelStyle);
+                        if (GUI.Button(new Rect(PAD + w - 80f, y, 70f, ROW - 2f), "Copy", _cachedButtonStyle))
+                            AvatarCopierController.SelectAndCopy(idx);
+                        y += ROW;
+                    }
+
+                    float acNavW = (w - 10f) / 2f;
+                    if (GUI.Button(new Rect(PAD, y, acNavW, ROW), "< Prev Page", _cachedButtonStyle))
+                        _acPlayerPage = Math.Max(0, _acPlayerPage - 1);
+                    if (GUI.Button(new Rect(PAD + acNavW + 10f, y, acNavW, ROW), "Next Page >", _cachedButtonStyle))
+                        _acPlayerPage = Math.Min(acTotalPages - 1, _acPlayerPage + 1);
+                    y += ROW + 4f;
+                }
+                else
+                {
+                    y = Label("No players. Click Refresh.", y, w);
+                }
 
                 if (AvatarCopierController.HasRevertState)
                     y = Button("Revert Avatar", y, 200f, 28f, () => AvatarCopierController.RevertAvatar());
@@ -2531,6 +2542,23 @@ namespace BonelabUtilityMod
 
                 y = Button("Create Waypoint", y, w * 0.48f, 28f, () => WaypointController.CreateWaypoint());
                 y = Button("Clear All Waypoints", y, w * 0.48f, 28f, () => WaypointController.ClearAllWaypoints());
+
+                // Waypoint list with teleport buttons
+                var wps = WaypointController.Waypoints;
+                if (wps.Count > 0)
+                {
+                    y = Section("Saved Waypoints", y, w);
+                    for (int i = 0; i < wps.Count; i++)
+                    {
+                        int idx = i;
+                        var wp = wps[i];
+                        string wpLabel = $"{wp.Name} ({wp.Position.x:0.0}, {wp.Position.y:0.0}, {wp.Position.z:0.0})";
+                        GUI.Label(new Rect(PAD, y, w - 90f, ROW), wpLabel, _cachedLabelStyle);
+                        if (GUI.Button(new Rect(PAD + w - 80f, y, 70f, ROW - 2f), "Teleport", _cachedButtonStyle))
+                            WaypointController.TeleportToWaypoint(idx);
+                        y += ROW;
+                    }
+                }
 
                 y = Label("Default Spawn: " + (WaypointController.HasDefaultSpawn ? "Set" : "None"), y, w);
                 y = Button("Set Default Spawn", y, w * 0.31f, 28f, () => WaypointController.SetDefaultSpawn());
@@ -2901,7 +2929,45 @@ namespace BonelabUtilityMod
             if (_netFreezePlayer)
             {
 
-                y = Button("Unfreeze All", y, 200f, 28f, () => FreezePlayerController.UnfreezeAll());
+                y = Button("Refresh Players", y, w * 0.48f, 28f, () => FreezePlayerController.RefreshPlayers());
+                y = Button("Unfreeze All", y, w * 0.48f, 28f, () => FreezePlayerController.UnfreezeAll());
+
+                var fpPlayers = FreezePlayerController.CachedPlayers;
+                if (fpPlayers.Count > 0)
+                {
+                    int fpTotalPages = (fpPlayers.Count + AVATAR_ITEMS_PER_PAGE - 1) / AVATAR_ITEMS_PER_PAGE;
+                    _fpPlayerPage = Math.Clamp(_fpPlayerPage, 0, fpTotalPages - 1);
+                    int fpStart = _fpPlayerPage * AVATAR_ITEMS_PER_PAGE;
+                    int fpEnd = Math.Min(fpStart + AVATAR_ITEMS_PER_PAGE, fpPlayers.Count);
+
+                    y = Section($"Players: {fpPlayers.Count} | Page {_fpPlayerPage + 1}/{fpTotalPages}", y, w);
+
+                    for (int i = fpStart; i < fpEnd; i++)
+                    {
+                        var p = fpPlayers[i];
+                        bool frozen = FreezePlayerController.IsFrozen(p.SmallID);
+                        var capturedId = p.SmallID;
+                        var capturedName = p.DisplayName;
+                        var capturedRig = p.Rig;
+                        string label = frozen ? $"[FROZEN] {p.DisplayName}" : p.DisplayName;
+                        GUI.Label(new Rect(PAD, y, w - 100f, ROW), label, _cachedLabelStyle);
+                        string btnText = frozen ? "Unfreeze" : "Freeze";
+                        if (GUI.Button(new Rect(PAD + w - 90f, y, 80f, ROW - 2f), btnText, _cachedButtonStyle))
+                            FreezePlayerController.ToggleFreeze(capturedId, capturedName, capturedRig);
+                        y += ROW;
+                    }
+
+                    float fpNavW = (w - 10f) / 2f;
+                    if (GUI.Button(new Rect(PAD, y, fpNavW, ROW), "< Prev Page", _cachedButtonStyle))
+                        _fpPlayerPage = Math.Max(0, _fpPlayerPage - 1);
+                    if (GUI.Button(new Rect(PAD + fpNavW + 10f, y, fpNavW, ROW), "Next Page >", _cachedButtonStyle))
+                        _fpPlayerPage = Math.Min(fpTotalPages - 1, _fpPlayerPage + 1);
+                    y += ROW + 4f;
+                }
+                else
+                {
+                    y = Label("No players. Click Refresh.", y, w);
+                }
             }
 
             y = Gap(y, 10f);
@@ -3164,30 +3230,45 @@ namespace BonelabUtilityMod
             _avatarSearchQuery = GUI.TextField(new Rect(PAD + 70f, y, w - 80f, ROW), _avatarSearchQuery ?? "");
             y += ROW + 4f;
 
-            if (GUI.Button(new Rect(PAD, y, 200f, 28f), "Search Avatars", _cachedButtonStyle))
-                AvatarSearchController.SearchAvatars(_avatarSearchQuery);
-            y += 32f;
-            y = Gap(y);
+            // Auto-search when text changes
+            if (_avatarSearchQuery != _prevAvatarSearchQuery)
+            {
+                _prevAvatarSearchQuery = _avatarSearchQuery;
+                _avatarSearchPage = 0;
+                if (!string.IsNullOrEmpty(_avatarSearchQuery))
+                    AvatarSearchController.SearchAvatars(_avatarSearchQuery);
+            }
 
             var results = AvatarSearchController.GetLastResults();
             if (results != null && results.Count > 0)
             {
-                y = Section("Results: " + results.Count, y, w);
-                int maxShow = Math.Min(results.Count, 40);
-                for (int i = 0; i < maxShow; i++)
+                int totalPages = (results.Count + AVATAR_ITEMS_PER_PAGE - 1) / AVATAR_ITEMS_PER_PAGE;
+                _avatarSearchPage = Math.Clamp(_avatarSearchPage, 0, totalPages - 1);
+                int start = _avatarSearchPage * AVATAR_ITEMS_PER_PAGE;
+                int end = Math.Min(start + AVATAR_ITEMS_PER_PAGE, results.Count);
+
+                y = Section($"Results: {results.Count} | Page {_avatarSearchPage + 1}/{totalPages}", y, w);
+
+                for (int i = start; i < end; i++)
                 {
                     var (name, barcode) = results[i];
-                    GUI.Label(new Rect(PAD, y, w - 90f, ROW), name);
+                    GUI.Label(new Rect(PAD, y, w - 90f, ROW), name, _cachedLabelStyle);
                     if (GUI.Button(new Rect(PAD + w - 80f, y, 70f, ROW - 2f), "Swap", _cachedButtonStyle))
                         AvatarSearchController.SwapAvatar(barcode);
                     y += ROW;
                 }
-                if (results.Count > maxShow)
-                    y = Label("... and " + (results.Count - maxShow) + " more", y, w);
+
+                // Nav buttons
+                float navW = (w - 10f) / 2f;
+                if (GUI.Button(new Rect(PAD, y, navW, ROW), "< Prev Page", _cachedButtonStyle))
+                    _avatarSearchPage = Math.Max(0, _avatarSearchPage - 1);
+                if (GUI.Button(new Rect(PAD + navW + 10f, y, navW, ROW), "Next Page >", _cachedButtonStyle))
+                    _avatarSearchPage = Math.Min(totalPages - 1, _avatarSearchPage + 1);
+                y += ROW + 4f;
             }
             else
             {
-                y = Label("No results. Enter a query and search.", y, w);
+                y = Label("No results. Enter a query to search.", y, w);
             }
         }
 

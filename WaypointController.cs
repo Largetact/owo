@@ -100,6 +100,7 @@ namespace BonelabUtilityMod
 
         // Overlay-accessible read-only state
         public static int WaypointCount => _waypoints.Count;
+        public static IReadOnlyList<Waypoint> Waypoints => _waypoints;
         public static string CurrentItemName { get => _currentItemName; set => _currentItemName = value; }
         public static string CurrentBarcode { get => _currentBarcode; set => _currentBarcode = value; }
         public static bool HasSavedSpawnPosition => _hasSavedSpawnPos;

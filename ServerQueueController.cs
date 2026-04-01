@@ -575,6 +575,9 @@ namespace BonelabUtilityMod
                 _queueLobbyId = 0;
                 StopCoroutine();
             }
+
+            // Clear the server code after successful join so it doesn't persist
+            _lastServerCode = "";
         }
 
         private static void OnDisconnected()

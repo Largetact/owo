@@ -50,6 +50,14 @@ namespace BonelabUtilityMod
             set => _playerSearchQuery = value ?? "";
         }
 
+        public static IReadOnlyList<PlayerEntry> CachedPlayers => _cachedPlayers;
+        public static bool IsFrozen(byte smallId) => _frozenPlayers.ContainsKey(smallId);
+
+        public static void RefreshPlayers()
+        {
+            RefreshPlayerList();
+        }
+
         /// <summary>
         /// Toggle freeze on a specific player by SmallID.
         /// </summary>

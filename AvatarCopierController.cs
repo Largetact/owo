@@ -101,6 +101,14 @@ namespace BonelabUtilityMod
             : $"{lastCopiedUsername} ({lastCopiedAvatarTitle})";
 
         public static int PlayerCount => cachedPlayers.Count;
+        public static IReadOnlyList<PlayerAvatarInfo> Players => cachedPlayers;
+
+        public static void SelectAndCopy(int index)
+        {
+            if (index < 0 || index >= cachedPlayers.Count) return;
+            currentPlayerIndex = index;
+            CopySelectedAvatar();
+        }
 
         public static void Initialize()
         {
