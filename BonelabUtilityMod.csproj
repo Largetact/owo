@@ -15,6 +15,7 @@
     <Compile Remove="StandaloneSpoofing\**" />
     <Compile Remove="StandaloneRagdoll\**" />
     <Compile Remove="StandaloneObjectLauncher\**" />
+    <Compile Remove="Decryption\**" />
   </ItemGroup>
 
   <!-- MelonLoader and BoneLib References -->
