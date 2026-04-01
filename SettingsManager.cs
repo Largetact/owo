@@ -188,7 +188,7 @@ namespace BonelabUtilityMod
             // Fixed section order for readability
             string[] orderedSections =
             {
-                "Global", "Player", "Combat", "CrazyGuns", "Dash", "Flight", "GravityBoots", "Ragdoll", "ExplosivePunch", "GroundPound",
+                "Global", "Player", "Combat", "GunModifier", "Dash", "Flight", "GravityBoots", "Ragdoll", "ExplosivePunch", "GroundPound",
                 "ExplosiveImpact", "DespawnAll", "ObjectLauncher", "ForceGrab",
                 "WaypointProjectile", "DropOnPlayer", "ServerQueue",
                 "BodyLogColor", "ScreenShare", "Keybinds", "CosmeticPresets", "Favorites",
@@ -361,14 +361,14 @@ namespace BonelabUtilityMod
 
             SafeExecute(() =>
             {
-                ChaosGunController.PurpleGuns = GetBool("CrazyGuns", "PurpleGuns", false);
-                ChaosGunController.InsaneDamage = GetBool("CrazyGuns", "InsaneDamage", false);
-                ChaosGunController.NoRecoil = GetBool("CrazyGuns", "NoRecoil", false);
-                ChaosGunController.InsaneFirerate = GetBool("CrazyGuns", "InsaneFirerate", false);
-                ChaosGunController.NoWeight = GetBool("CrazyGuns", "NoWeight", false);
-                ChaosGunController.GunsBounce = GetBool("CrazyGuns", "GunsBounce", false);
-                ChaosGunController.NoReload = GetBool("CrazyGuns", "NoReload", false);
-            }, "Load Crazy Guns");
+                ChaosGunController.PurpleGuns = GetBool("GunModifier", "PurpleGuns", false);
+                ChaosGunController.InsaneDamage = GetBool("GunModifier", "InsaneDamage", false);
+                ChaosGunController.NoRecoil = GetBool("GunModifier", "NoRecoil", false);
+                ChaosGunController.InsaneFirerate = GetBool("GunModifier", "InsaneFirerate", false);
+                ChaosGunController.NoWeight = GetBool("GunModifier", "NoWeight", false);
+                ChaosGunController.GunsBounce = GetBool("GunModifier", "GunsBounce", false);
+                ChaosGunController.NoReload = GetBool("GunModifier", "NoReload", false);
+            }, "Load Gun Modifier");
 
             SafeExecute(() =>
             {
@@ -959,14 +959,14 @@ namespace BonelabUtilityMod
 
             SafeExecute(() =>
             {
-                SetBool("CrazyGuns", "PurpleGuns", ChaosGunController.PurpleGuns);
-                SetBool("CrazyGuns", "InsaneDamage", ChaosGunController.InsaneDamage);
-                SetBool("CrazyGuns", "NoRecoil", ChaosGunController.NoRecoil);
-                SetBool("CrazyGuns", "InsaneFirerate", ChaosGunController.InsaneFirerate);
-                SetBool("CrazyGuns", "NoWeight", ChaosGunController.NoWeight);
-                SetBool("CrazyGuns", "GunsBounce", ChaosGunController.GunsBounce);
-                SetBool("CrazyGuns", "NoReload", ChaosGunController.NoReload);
-            }, "Save Crazy Guns");
+                SetBool("GunModifier", "PurpleGuns", ChaosGunController.PurpleGuns);
+                SetBool("GunModifier", "InsaneDamage", ChaosGunController.InsaneDamage);
+                SetBool("GunModifier", "NoRecoil", ChaosGunController.NoRecoil);
+                SetBool("GunModifier", "InsaneFirerate", ChaosGunController.InsaneFirerate);
+                SetBool("GunModifier", "NoWeight", ChaosGunController.NoWeight);
+                SetBool("GunModifier", "GunsBounce", ChaosGunController.GunsBounce);
+                SetBool("GunModifier", "NoReload", ChaosGunController.NoReload);
+            }, "Save Gun Modifier");
 
             SafeExecute(() =>
             {

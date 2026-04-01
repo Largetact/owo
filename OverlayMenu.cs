@@ -84,7 +84,7 @@ namespace BonelabUtilityMod
         private static bool _combatRandExplode = false;
         private static bool _combatFullAuto = false;
         private static bool _combatInfAmmo = false;
-        private static bool _combatCrazyGuns = false;
+        private static bool _combatGunModifier = false;
         private static bool _combatSpawnOnPlayer = false;
         private static bool _combatWaypointProj = false;
         private static bool _combatDamageMult = false;
@@ -752,7 +752,7 @@ namespace BonelabUtilityMod
             ("Random Explode", "random explode chance bomb surprise", 1, "RANDOM EXPLODE"),
             ("Full Auto", "full auto fire rate rapid shoot", 1, "FULL AUTO"),
             ("Infinite Ammo", "infinite ammo unlimited bullets magazine", 1, "INFINITE AMMO"),
-            ("Crazy Guns", "crazy guns glow rainbow damage recoil weight bounce reload", 1, "CRAZY GUNS"),
+            ("Gun Modifier", "gun modifier glow rainbow damage recoil weight bounce reload", 1, "GUN MODIFIER"),
             ("Spawn on Player", "spawn player drop item overhead homing", 1, "SPAWN ON PLAYER"),
             ("Waypoint Projectile", "waypoint projectile path homing guide", 1, "WAYPOINT PROJECTILE"),
             ("Object Launcher", "launcher shoot spawn object projectile homing", 2, "OBJECT LAUNCHER"),
@@ -1826,8 +1826,8 @@ namespace BonelabUtilityMod
             }
 
             y = Gap(y, 10f);
-            y = CollapsibleHeader("CRAZY GUNS", ref _combatCrazyGuns, y, w);
-            if (_combatCrazyGuns)
+            y = CollapsibleHeader("GUN MODIFIER", ref _combatGunModifier, y, w);
+            if (_combatGunModifier)
             {
 
                 bool cgPurple = ChaosGunController.PurpleGuns;

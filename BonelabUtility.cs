@@ -1460,8 +1460,8 @@ namespace BonelabUtilityMod
                 // ============================================
                 var combatPage = _mainPage.CreatePage("Combat", Color.red);
 
-                // ── Crazy Guns submenu inside Combat ──
-                var crazyGunsPage = combatPage.CreatePage("Crazy Guns", Color.cyan);
+                // ── Gun Modifier submenu inside Combat ──
+                var gunModifierPage = combatPage.CreatePage("Gun Modifier", Color.cyan);
 
                 // ── Damage Multiplier submenu inside Combat ──
                 var damageMultPage = combatPage.CreatePage("Damage Multiplier", Color.red);
@@ -1511,19 +1511,19 @@ namespace BonelabUtilityMod
                     InfiniteAmmoController.IsEnabled,
                     (value) => { InfiniteAmmoController.IsEnabled = value; SettingsManager.MarkDirty(); }
                 );
-                crazyGunsPage.CreateBool("Glow Blue Guns", Color.blue, ChaosGunController.PurpleGuns,
+                gunModifierPage.CreateBool("Glow Blue Guns", Color.blue, ChaosGunController.PurpleGuns,
                     (value) => { ChaosGunController.PurpleGuns = value; SettingsManager.MarkDirty(); });
-                crazyGunsPage.CreateBool("Insane Damage!", Color.red, ChaosGunController.InsaneDamage,
+                gunModifierPage.CreateBool("Insane Damage!", Color.red, ChaosGunController.InsaneDamage,
                     (value) => { ChaosGunController.InsaneDamage = value; SettingsManager.MarkDirty(); });
-                crazyGunsPage.CreateBool("No Recoil!", Color.red, ChaosGunController.NoRecoil,
+                gunModifierPage.CreateBool("No Recoil!", Color.red, ChaosGunController.NoRecoil,
                     (value) => { ChaosGunController.NoRecoil = value; SettingsManager.MarkDirty(); });
-                crazyGunsPage.CreateBool("Insane Firerate", Color.red, ChaosGunController.InsaneFirerate,
+                gunModifierPage.CreateBool("Insane Firerate", Color.red, ChaosGunController.InsaneFirerate,
                     (value) => { ChaosGunController.InsaneFirerate = value; SettingsManager.MarkDirty(); });
-                crazyGunsPage.CreateBool("No Weight!", Color.red, ChaosGunController.NoWeight,
+                gunModifierPage.CreateBool("No Weight!", Color.red, ChaosGunController.NoWeight,
                     (value) => { ChaosGunController.NoWeight = value; SettingsManager.MarkDirty(); });
-                crazyGunsPage.CreateBool("Guns Bounce!", Color.red, ChaosGunController.GunsBounce,
+                gunModifierPage.CreateBool("Guns Bounce!", Color.red, ChaosGunController.GunsBounce,
                     (value) => { ChaosGunController.GunsBounce = value; SettingsManager.MarkDirty(); });
-                crazyGunsPage.CreateBool("No Reload", Color.red, ChaosGunController.NoReload,
+                gunModifierPage.CreateBool("No Reload", Color.red, ChaosGunController.NoReload,
                     (value) => { ChaosGunController.NoReload = value; SettingsManager.MarkDirty(); });
 
                 // ============================================
