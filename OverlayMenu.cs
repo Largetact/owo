@@ -16,7 +16,7 @@ namespace BonelabUtilityMod
         private static string _avatarSearchQuery = "";
         private static string _prevAvatarSearchQuery = "";
         private static int _avatarSearchPage = 0;
-        private const int AVATAR_ITEMS_PER_PAGE = 10;
+        private const int AVATAR_ITEMS_PER_PAGE = 25;
 
         // Spawnable search states for various pages
         private static string _launcherSearchQuery = "";
