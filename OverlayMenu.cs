@@ -44,6 +44,7 @@ namespace BonelabUtilityMod
         private static bool _utilDespawn = false;
         private static bool _utilAntiDespawn = false;
         private static bool _utilAntiGrab = false;
+        private static bool _utilSpawnLimiter = false;
         private static bool _utilForceSpawner = false;
         private static bool _utilWindSfx = false;
         private static bool _utilTeleport = false;
@@ -761,6 +762,7 @@ namespace BonelabUtilityMod
             ("Despawn All", "despawn clear remove cleanup all", 4, "DESPAWN ALL"),
             ("Anti-Despawn", "anti despawn keep persist prevent", 4, "ANTI-DESPAWN"),
             ("Anti-Grab", "anti grab prevent steal protect", 4, "ANTI-GRAB"),
+            ("Spawn Limiter", "spawn limiter anti crash rate limit delay protect", 4, "SPAWN LIMITER"),
             ("Force Spawner", "force spawner unredact spawn distance", 4, "FORCE SPAWNER"),
             ("Remove Wind SFX", "wind sound audio sfx remove quiet", 4, "REMOVE WIND SFX"),
             ("Teleport", "teleport warp position save player", 4, "TELEPORT"),
@@ -2396,6 +2398,28 @@ namespace BonelabUtilityMod
                 float di = DespawnAllController.AutoDespawnIntervalMins;
                 y = Slider("Auto Interval (min)", ref di, 0.5f, 30f, y, w);
                 DespawnAllController.AutoDespawnIntervalMins = di;
+
+                bool dod = DespawnAllController.DespawnOnDisconnect;
+                y = Toggle(ref dod, "Despawn on Disconnect", y, w);
+                DespawnAllController.DespawnOnDisconnect = dod;
+            }
+
+            y = Gap(y, 10f);
+            y = CollapsibleHeader("SPAWN LIMITER", ref _utilSpawnLimiter, y, w);
+            if (_utilSpawnLimiter)
+            {
+                bool sle = SpawnLimiterController.Enabled;
+                y = Toggle(ref sle, "Enabled", y, w);
+                SpawnLimiterController.Enabled = sle;
+
+                float sld = SpawnLimiterController.SpawnDelay;
+                y = Slider("Spawn Delay (s)", ref sld, 0.05f, 5f, y, w);
+                SpawnLimiterController.SpawnDelay = sld;
+
+                int slm = SpawnLimiterController.MaxPerFrame;
+                float slmf = slm;
+                y = Slider("Max Per Frame", ref slmf, 1f, 50f, y, w);
+                SpawnLimiterController.MaxPerFrame = (int)slmf;
             }
 
             y = Gap(y, 10f);

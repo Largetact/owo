@@ -85,7 +85,7 @@ namespace BonelabUtilityMod
         internal const string Name = "OwO";
         internal const string Description = "Bullshit Client for people with schizophrenia";
         internal const string Author = "XI";
-        internal const string Version = "4.2.16";
+        internal const string Version = "4.3.0";
 
         private static readonly string[] _emoticons = { "UwU", "QwQ", ".w.", "^w^", ";w;", "=w=", "-w-", "0w0", "7w7", "XwX" };
         private static int _emoticonIndex = 0;
@@ -651,7 +651,6 @@ namespace BonelabUtilityMod
             AutoRunController.Update();
             AutoHostController.Update();
             ChaosGunController.Update();
-            InfiniteAmmoController.Update();
             ExplosiveImpactController.Update();
             AntiGravityChangeController.Update();
             SpinbotController.Update();
@@ -659,6 +658,7 @@ namespace BonelabUtilityMod
             GhostModeController.Update();
             AntiSlowmoController.Update();
             AntiTeleportController.Update();
+            ForceSpawnerController.Update();
             AntiRagdollController.Update();
             DamageMultiplierController.Update();
             AvatarLoggerController.Update();
@@ -4148,20 +4148,7 @@ namespace BonelabUtilityMod
 
 
 
-        /// <summary>
-        /// Harmony prefix: override AmmoCount to always return 1 for guns without magazines (shotguns etc).
-        /// </summary>
-        [HarmonyPatch(typeof(Gun), "AmmoCount")]
-        [HarmonyPrefix]
-        public static bool AmmoCountPrefix(ref int __result)
-        {
-            if (_enabled)
-            {
-                __result = 1;
-                return false; // skip original
-            }
-            return true;
-        }
+
 
 
 
@@ -4189,29 +4176,7 @@ namespace BonelabUtilityMod
                 EnsureAmmo();
         }
 
-        /// <summary>
-        /// Per-frame fallback: ensure ammo pools never hit zero.
-        /// The Harmony patches handle most cases, this is just a safety net.
-        /// </summary>
-        public static void Update()
-        {
-            if (!_enabled) return;
 
-            try
-            {
-                var inv = AmmoInventory.Instance;
-                if (inv != null)
-                {
-                    if (inv.GetCartridgeCount("light") <= 0)
-                        inv.AddCartridge(inv.lightAmmoGroup, 10000);
-                    if (inv.GetCartridgeCount("medium") <= 0)
-                        inv.AddCartridge(inv.mediumAmmoGroup, 10000);
-                    if (inv.GetCartridgeCount("heavy") <= 0)
-                        inv.AddCartridge(inv.heavyAmmoGroup, 10000);
-                }
-            }
-            catch { }
-        }
     }
 
     /// <summary>

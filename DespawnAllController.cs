@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using MelonLoader;
 using UnityEngine;
 using BoneLib;
@@ -46,9 +47,14 @@ namespace BonelabUtilityMod
         private static float _autoDespawnIntervalMins = 5f;
         private static bool _keepHolsteredItems = false;
         private static bool _keepOnlyMyHolsters = true;
+        private static bool _despawnOnDisconnect = false;
+        private static bool _disconnectHooked = false;
 
         // ── Timer state ───────────────────────────────────────────
         private static object _timerCoroutine = null;
+        private static object _despawnCoroutine = null;
+        private static bool _isDespawning = false;
+        private const int DESPAWN_BATCH_SIZE = 5;
 
         // ── Properties ────────────────────────────────────────────
 
@@ -112,11 +118,116 @@ namespace BonelabUtilityMod
             }
         }
 
+        public static bool DespawnOnDisconnect
+        {
+            get => _despawnOnDisconnect;
+            set
+            {
+                _despawnOnDisconnect = value;
+                Main.MelonLog.Msg($"Despawn on Disconnect {(value ? "ENABLED" : "DISABLED")}");
+                if (value)
+                    HookDisconnect();
+            }
+        }
+
         // ── Initialization ────────────────────────────────────────
 
         public static void Initialize()
         {
             Main.MelonLog.Msg("DespawnAllController initialized (FusionProtector-style, no permission check)");
+        }
+
+        /// <summary>
+        /// Hooks LabFusion's MultiplayerHooking.OnDisconnected event via reflection.
+        /// Only hooks once — subsequent calls are no-ops.
+        /// </summary>
+        private static void HookDisconnect()
+        {
+            if (_disconnectHooked) return;
+            try
+            {
+                Type hookType = null;
+                foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
+                {
+                    try
+                    {
+                        hookType = asm.GetType("LabFusion.Utilities.MultiplayerHooking");
+                        if (hookType != null) break;
+                    }
+                    catch { }
+                }
+                if (hookType == null)
+                {
+                    Main.MelonLog.Warning("[DespawnAll] MultiplayerHooking type not found");
+                    return;
+                }
+
+                var evt = hookType.GetEvent("OnDisconnected",
+                    BindingFlags.Public | BindingFlags.Static);
+                if (evt == null)
+                {
+                    Main.MelonLog.Warning("[DespawnAll] OnDisconnected event not found");
+                    return;
+                }
+
+                // Create a delegate matching the event's handler type (ServerEvent = Action)
+                var handlerMethod = typeof(DespawnAllController).GetMethod(
+                    nameof(OnDisconnected), BindingFlags.NonPublic | BindingFlags.Static);
+                var handler = Delegate.CreateDelegate(evt.EventHandlerType, handlerMethod);
+                evt.AddEventHandler(null, handler);
+
+                _disconnectHooked = true;
+                Main.MelonLog.Msg("[DespawnAll] Hooked OnDisconnected");
+            }
+            catch (Exception ex)
+            {
+                Main.MelonLog.Warning($"[DespawnAll] Failed to hook OnDisconnected: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Called when disconnecting from a server. Despawns all Poolee objects locally.
+        /// Same approach as FusionProtector's cleandisconnect.
+        /// </summary>
+        private static void OnDisconnected()
+        {
+            if (!_despawnOnDisconnect) return;
+            try
+            {
+                var poolees = Resources.FindObjectsOfTypeAll<Poolee>();
+                int count = 0;
+                foreach (var poolee in poolees)
+                {
+                    try
+                    {
+                        if (poolee == null) continue;
+                        var root = poolee.transform?.root;
+                        if (root == null) continue;
+
+                        var entity = root.GetComponent<MarrowEntity>();
+                        if (entity != null)
+                        {
+                            entity.Despawn();
+                            count++;
+                        }
+                        else
+                        {
+                            var body = root.GetComponent<MarrowBody>();
+                            if (body?.Entity != null)
+                            {
+                                body.Entity.Despawn();
+                                count++;
+                            }
+                        }
+                    }
+                    catch { }
+                }
+                Main.MelonLog.Msg($"[DespawnAll] Disconnect cleanup: despawned {count} poolees");
+            }
+            catch (Exception ex)
+            {
+                Main.MelonLog.Warning($"[DespawnAll] Disconnect cleanup error: {ex.Message}");
+            }
         }
 
         /// <summary>
@@ -339,21 +450,41 @@ namespace BonelabUtilityMod
 
         /// <summary>
         /// Despawn a single NetworkEntity via the network.
-        /// FusionProtector checks PermissionLevel == Owner here — we skip that.
+        /// Falls back to local Poolee.Despawn if network despawn fails.
         /// </summary>
         private static void DespawnNow(NetworkEntity entity)
         {
             try
             {
+                // Validate entity is still registered and alive
+                if (entity == null) return;
+                var extender = entity.GetExtender<IMarrowEntityExtender>();
+                if (extender == null) return;
+                var marrow = extender.MarrowEntity;
+                if (marrow == null) return;
+
                 NetworkAssetSpawner.Despawn(new NetworkAssetSpawner.DespawnRequestInfo
                 {
                     EntityID = entity.ID,
                     DespawnEffect = false
                 });
             }
-            catch (Exception ex)
+            catch
             {
-                Main.MelonLog.Warning($"DespawnNow error: {ex.Message}");
+                // Network despawn failed — try local Poolee fallback
+                try
+                {
+                    var ext = entity?.GetExtender<IMarrowEntityExtender>();
+                    var me = ext?.MarrowEntity;
+                    if (me != null)
+                    {
+                        var poolee = ((Component)me).gameObject?.GetComponent<Poolee>()
+                                  ?? ((Component)me).gameObject?.GetComponentInChildren<Poolee>();
+                        if (poolee != null)
+                            poolee.Despawn();
+                    }
+                }
+                catch { }
             }
         }
 
@@ -492,18 +623,43 @@ namespace BonelabUtilityMod
         /// <summary>
         /// Despawn all network entities matching the current filter.
         /// No permission check — works for any player, not just Owner.
+        /// Uses a batched coroutine to avoid flooding Fusion's network queue.
         /// </summary>
         public static void DespawnAll()
         {
+            if (_isDespawning)
+            {
+                NotificationHelper.Send(BoneLib.Notifications.NotificationType.Warning,
+                    "Despawn already in progress...");
+                return;
+            }
+
+            if (!NetworkInfo.HasServer)
+            {
+                NotificationHelper.Send(BoneLib.Notifications.NotificationType.Warning,
+                    "Not connected to a server");
+                return;
+            }
+
+            // Stop any previous despawn coroutine
+            if (_despawnCoroutine != null)
+            {
+                MelonCoroutines.Stop(_despawnCoroutine);
+                _despawnCoroutine = null;
+            }
+
+            _despawnCoroutine = MelonCoroutines.Start(DespawnAllCoroutine());
+        }
+
+        private static IEnumerator DespawnAllCoroutine()
+        {
+            _isDespawning = true;
+            int count = 0;
+            int skippedHolster = 0;
+            int skippedMag = 0;
+
             try
             {
-                if (!NetworkInfo.HasServer)
-                {
-                    NotificationHelper.Send(BoneLib.Notifications.NotificationType.Warning,
-                        "Not connected to a server");
-                    return;
-                }
-
                 // Collect holstered item IDs if protection is enabled
                 HashSet<int> holsteredIds = null;
                 if (_keepHolsteredItems)
@@ -511,46 +667,53 @@ namespace BonelabUtilityMod
                     holsteredIds = GetHolsteredObjectIds(_keepOnlyMyHolsters);
                 }
 
+                // Snapshot the current filter so it doesn't change mid-coroutine
+                var filter = _filter;
+
                 var entities = GetNetworkEntities();
-                int count = 0;
-                int skippedHolster = 0;
-                int skippedMag = 0;
+                var toDespawn = new List<NetworkEntity>();
 
                 foreach (var entity in entities)
                 {
-                    if (PassesFilter(entity, _filter))
+                    if (!PassesFilter(entity, filter)) continue;
+
+                    if (holsteredIds != null && IsEntityHolstered(entity, holsteredIds))
                     {
-                        // Skip holstered items if protection is on
-                        if (holsteredIds != null && IsEntityHolstered(entity, holsteredIds))
-                        {
-                            skippedHolster++;
-                            continue;
-                        }
-
-                        // Skip magazines currently inserted in a gun
-                        if (IsMagazineInGun(entity))
-                        {
-                            skippedMag++;
-                            continue;
-                        }
-
-                        DespawnNow(entity);
-                        count++;
+                        skippedHolster++;
+                        continue;
                     }
+
+                    if (IsMagazineInGun(entity))
+                    {
+                        skippedMag++;
+                        continue;
+                    }
+
+                    toDespawn.Add(entity);
                 }
 
-                string holsterMsg = skippedHolster > 0 ? $", kept {skippedHolster} holstered" : "";
-                string magMsg = skippedMag > 0 ? $", kept {skippedMag} mags in guns" : "";
-                Main.MelonLog.Msg($"Despawned {count} entities (filter: {_filter}{holsterMsg}{magMsg})");
-                NotificationHelper.Send(BoneLib.Notifications.NotificationType.Success,
-                    $"Despawned {count} entities ({_filter}{holsterMsg}{magMsg})");
+                // Despawn in batches to avoid flooding Fusion's network queue
+                for (int i = 0; i < toDespawn.Count; i++)
+                {
+                    DespawnNow(toDespawn[i]);
+                    count++;
+
+                    // Yield every DESPAWN_BATCH_SIZE to let Fusion process messages
+                    if (count % DESPAWN_BATCH_SIZE == 0)
+                        yield return null;
+                }
             }
-            catch (Exception ex)
+            finally
             {
-                Main.MelonLog.Error($"DespawnAll error: {ex.Message}");
-                NotificationHelper.Send(BoneLib.Notifications.NotificationType.Error,
-                    $"Despawn failed: {ex.Message}");
+                _isDespawning = false;
+                _despawnCoroutine = null;
             }
+
+            string holsterMsg = skippedHolster > 0 ? $", kept {skippedHolster} holstered" : "";
+            string magMsg = skippedMag > 0 ? $", kept {skippedMag} mags in guns" : "";
+            Main.MelonLog.Msg($"Despawned {count} entities (filter: {_filter}{holsterMsg}{magMsg})");
+            NotificationHelper.Send(BoneLib.Notifications.NotificationType.Success,
+                $"Despawned {count} entities ({_filter}{holsterMsg}{magMsg})");
         }
 
         /// <summary>

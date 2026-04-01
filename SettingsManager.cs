@@ -568,6 +568,13 @@ namespace BonelabUtilityMod
 
             SafeExecute(() =>
             {
+                SpawnLimiterController.Enabled = GetBool("SpawnLimiter", "Enabled", true);
+                SpawnLimiterController.SpawnDelay = GetFloat("SpawnLimiter", "SpawnDelay", 0.75f);
+                SpawnLimiterController.MaxPerFrame = GetInt("SpawnLimiter", "MaxPerFrame", 5);
+            }, "Load Spawn Limiter");
+
+            SafeExecute(() =>
+            {
                 BodyLogColorController.Enabled = GetBool("BodyLogColor", "Enabled", false);
                 BodyLogColorController.BodyLogR = GetFloat("BodyLogColor", "BodyLogR", 255f);
                 BodyLogColorController.BodyLogG = GetFloat("BodyLogColor", "BodyLogG", 255f);
@@ -1156,6 +1163,13 @@ namespace BonelabUtilityMod
             {
                 SetBool("AntiGrab", "Enabled", AntiGrabController.Enabled);
             }, "Save Anti-Grab");
+
+            SafeExecute(() =>
+            {
+                SetBool("SpawnLimiter", "Enabled", SpawnLimiterController.Enabled);
+                SetFloat("SpawnLimiter", "SpawnDelay", SpawnLimiterController.SpawnDelay);
+                SetInt("SpawnLimiter", "MaxPerFrame", SpawnLimiterController.MaxPerFrame);
+            }, "Save Spawn Limiter");
 
             SafeExecute(() =>
             {
