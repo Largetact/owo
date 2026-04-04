@@ -1,19 +1,380 @@
 using HarmonyLib;
 using MelonLoader;
 using UnityEngine;
+using UnityEngine.Rendering;
 using BoneLib;
 using Il2CppSLZ.Marrow;
 using Il2CppSLZ.Marrow.Data;
 using Il2CppInterop.Runtime.InteropTypes.Arrays;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace BonelabUtilityMod
 {
     [HarmonyPatch]
     public static class ChaosGunController
     {
+        // ── Custom Gun Color system ──
+        private static bool _customGunColorEnabled = false;
+        public static bool CustomGunColorEnabled
+        {
+            get => _customGunColorEnabled;
+            set
+            {
+                if (_customGunColorEnabled && !value) RestoreCustomColor();
+                _customGunColorEnabled = value;
+            }
+        }
+        public static bool RainbowEnabled = true;
+        public static bool EmissionEnabled = true;
+        public static bool ReflectionEnabled = true;
+        public static bool TransparencyEnabled = false;
+        public static float TransparencyAmount = 0.5f;
+        public static float ColorR = 1f;
+        public static float ColorG = 0f;
+        public static float ColorB = 1f;
+        public static float EmissionIntensity = 4f;
+        public static float RainbowSpeed = 0.25f;
+
+        // Gradient mode
+        public static bool GradientEnabled = false;
+        public static float GradientSpeed = 0.5f;
+        public static float GradientSpread = 1f;
+        public static float Color2R = 0f;
+        public static float Color2G = 1f;
+        public static float Color2B = 0f;
+
+        // ── Shader Library ──
+        public static bool ShaderLibraryEnabled = false;
+        public static int SelectedShaderIndex = 0;
+        private static List<Shader> _availableShaders = new List<Shader>();
+        private static List<string> _shaderNames = new List<string>();
+        private static Dictionary<int, Shader> _origShaders = new Dictionary<int, Shader>();
+        private static bool _shadersDirty = true;
+
+        public static string SelectedShaderName => _shaderNames.Count > 0 && SelectedShaderIndex >= 0 && SelectedShaderIndex < _shaderNames.Count
+            ? _shaderNames[SelectedShaderIndex] : "None";
+        public static int ShaderCount => _shaderNames.Count;
+        public static List<string> ShaderNames => _shaderNames;
+
+        public static void NextShader()
+        {
+            if (_shaderNames.Count == 0) return;
+            SelectedShaderIndex = (SelectedShaderIndex + 1) % _shaderNames.Count;
+        }
+
+        public static void PrevShader()
+        {
+            if (_shaderNames.Count == 0) return;
+            SelectedShaderIndex = (SelectedShaderIndex - 1 + _shaderNames.Count) % _shaderNames.Count;
+        }
+
+        public static void RefreshShaderList()
+        {
+            _availableShaders.Clear();
+            _shaderNames.Clear();
+            try
+            {
+                var allShaders = Resources.FindObjectsOfTypeAll<Shader>();
+                foreach (Shader s in allShaders)
+                {
+                    if (s == null) continue;
+                    string n = s.name;
+                    if (string.IsNullOrEmpty(n)) continue;
+                    // Filter out shaders unsuitable for mesh rendering
+                    if (n.StartsWith("Hidden/") || n.StartsWith("GUI/") || n.StartsWith("UI/") ||
+                        n.Contains("Internal") || n.Contains("Sprite") || n.Contains("TextMesh"))
+                        continue;
+                    _availableShaders.Add(s);
+                    _shaderNames.Add(n);
+                }
+                // Sort alphabetically
+                var sorted = _shaderNames.Select((name, idx) => (name, idx)).OrderBy(x => x.name).ToList();
+                _shaderNames = sorted.Select(x => x.name).ToList();
+                var sortedShaders = sorted.Select(x => _availableShaders[x.idx]).ToList();
+                _availableShaders = sortedShaders;
+            }
+            catch { }
+            _shadersDirty = false;
+            if (SelectedShaderIndex >= _shaderNames.Count)
+                SelectedShaderIndex = 0;
+        }
+
+        public static void ApplyShaderToGun()
+        {
+            if (_availableShaders.Count == 0 || SelectedShaderIndex < 0 || SelectedShaderIndex >= _availableShaders.Count) return;
+            Shader targetShader = _availableShaders[SelectedShaderIndex];
+            try
+            {
+                ApplyShaderToHand(Player.LeftHand, targetShader);
+                ApplyShaderToHand(Player.RightHand, targetShader);
+            }
+            catch { }
+        }
+
+        private static void ApplyShaderToHand(Hand hand, Shader shader)
+        {
+            if (hand == null) return;
+            Gun gun = Player.GetComponentInHand<Gun>(hand);
+            if (gun == null) return;
+            foreach (Renderer r in ((Component)gun).GetComponentsInChildren<Renderer>())
+            {
+                if (r is ParticleSystemRenderer || r is TrailRenderer) continue;
+                foreach (Material mat in (Il2CppArrayBase<Material>)(object)r.materials)
+                {
+                    string sn = mat.shader != null ? mat.shader.name : "";
+                    if (sn.Contains("Scope") || sn.Contains("Lens") || sn.Contains("Reticle") ||
+                        sn.Contains("Holographic") || sn.Contains("Stencil")) continue;
+                    string mn = mat.name.ToLower();
+                    if (mn.Contains("lens") || mn.Contains("reticle") || mn.Contains("scope_glass")) continue;
+                    int id = ((Object)mat).GetInstanceID();
+                    if (!_origShaders.ContainsKey(id))
+                        _origShaders[id] = mat.shader;
+                    mat.shader = shader;
+                }
+            }
+        }
+
+        public static void RevertShaders()
+        {
+            try
+            {
+                RevertShadersOnHand(Player.LeftHand);
+                RevertShadersOnHand(Player.RightHand);
+            }
+            catch { }
+            _origShaders.Clear();
+        }
+
+        private static void RevertShadersOnHand(Hand hand)
+        {
+            if (hand == null) return;
+            Gun gun = Player.GetComponentInHand<Gun>(hand);
+            if (gun == null) return;
+            foreach (Renderer r in ((Component)gun).GetComponentsInChildren<Renderer>())
+            {
+                foreach (Material mat in (Il2CppArrayBase<Material>)(object)r.materials)
+                {
+                    int id = ((Object)mat).GetInstanceID();
+                    if (_origShaders.TryGetValue(id, out var orig))
+                        mat.shader = orig;
+                }
+            }
+        }
+
+        // ── Texture Editor ──
+        public static int TextureMode = 0; // 0=Original, 1=Solid, 2=Gradient, 3=Noise
+        public static float TexGradR2 = 0f;
+        public static float TexGradG2 = 1f;
+        public static float TexGradB2 = 0f;
+        public static float TexNoiseScale = 5f;
+        public static float TexScrollSpeed = 0f;
+        private static Texture2D _generatedTex = null;
+        private static int _lastTexMode = -1;
+        private static float _lastTexR = -1, _lastTexG = -1, _lastTexB = -1;
+        private static float _lastTexR2 = -1, _lastTexG2 = -1, _lastTexB2 = -1;
+        private static float _lastTexNoise = -1;
+        public static readonly string[] TextureModeNames = { "Original", "Solid", "Gradient", "Noise" };
+
+        public static string TextureModeName => TextureModeNames[Mathf.Clamp(TextureMode, 0, TextureModeNames.Length - 1)];
+
+        public static void ApplyTextureToGun()
+        {
+            if (TextureMode == 0)
+            {
+                // Restore original textures
+                RestoreTextures();
+                return;
+            }
+            RegenerateTexture();
+            if (_generatedTex == null) return;
+            try
+            {
+                ApplyTexToHand(Player.LeftHand, _generatedTex);
+                ApplyTexToHand(Player.RightHand, _generatedTex);
+            }
+            catch { }
+        }
+
+        public static void RegenerateTexture()
+        {
+            bool paramsChanged = TextureMode != _lastTexMode ||
+                ColorR != _lastTexR || ColorG != _lastTexG || ColorB != _lastTexB ||
+                TexGradR2 != _lastTexR2 || TexGradG2 != _lastTexG2 || TexGradB2 != _lastTexB2 ||
+                TexNoiseScale != _lastTexNoise;
+            if (!paramsChanged && _generatedTex != null) return;
+
+            int size = 256;
+            if (_generatedTex == null)
+                _generatedTex = new Texture2D(size, size, TextureFormat.RGBA32, false);
+            _generatedTex.wrapMode = TextureWrapMode.Repeat;
+            _generatedTex.filterMode = FilterMode.Bilinear;
+
+            Color c1 = new Color(ColorR, ColorG, ColorB, 1f);
+            Color c2 = new Color(TexGradR2, TexGradG2, TexGradB2, 1f);
+
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    float t = (float)x / (size - 1);
+                    Color pixel;
+                    switch (TextureMode)
+                    {
+                        case 1: // Solid
+                            pixel = c1;
+                            break;
+                        case 2: // Gradient
+                            pixel = Color.Lerp(c1, c2, t);
+                            break;
+                        case 3: // Noise pattern
+                            float nx = x * TexNoiseScale / size;
+                            float ny = y * TexNoiseScale / size;
+                            float noise = Mathf.PerlinNoise(nx, ny);
+                            pixel = Color.Lerp(c1, c2, noise);
+                            break;
+                        default:
+                            pixel = c1;
+                            break;
+                    }
+                    _generatedTex.SetPixel(x, y, pixel);
+                }
+            }
+            _generatedTex.Apply();
+
+            _lastTexMode = TextureMode;
+            _lastTexR = ColorR; _lastTexG = ColorG; _lastTexB = ColorB;
+            _lastTexR2 = TexGradR2; _lastTexG2 = TexGradG2; _lastTexB2 = TexGradB2;
+            _lastTexNoise = TexNoiseScale;
+        }
+
+        private static void ApplyTexToHand(Hand hand, Texture2D tex)
+        {
+            if (hand == null) return;
+            Gun gun = Player.GetComponentInHand<Gun>(hand);
+            if (gun == null) return;
+            foreach (Renderer r in ((Component)gun).GetComponentsInChildren<Renderer>())
+            {
+                if (r is ParticleSystemRenderer || r is TrailRenderer) continue;
+                foreach (Material mat in (Il2CppArrayBase<Material>)(object)r.materials)
+                {
+                    string sn = mat.shader != null ? mat.shader.name : "";
+                    if (sn.Contains("Scope") || sn.Contains("Lens") || sn.Contains("Reticle") ||
+                        sn.Contains("Holographic") || sn.Contains("Stencil")) continue;
+                    string mn = mat.name.ToLower();
+                    if (mn.Contains("lens") || mn.Contains("reticle") || mn.Contains("scope_glass")) continue;
+                    int id = ((Object)mat).GetInstanceID();
+                    CacheMatOriginal(mat, id);
+                    if (mat.HasProperty("_BaseMap"))
+                        mat.SetTexture("_BaseMap", tex);
+                    if (mat.HasProperty("_MainTex"))
+                        mat.SetTexture("_MainTex", tex);
+                }
+            }
+        }
+
+        public static void RestoreTextures()
+        {
+            try
+            {
+                RestoreTexOnHand(Player.LeftHand);
+                RestoreTexOnHand(Player.RightHand);
+            }
+            catch { }
+        }
+
+        private static void RestoreTexOnHand(Hand hand)
+        {
+            if (hand == null) return;
+            Gun gun = Player.GetComponentInHand<Gun>(hand);
+            if (gun == null) return;
+            foreach (Renderer r in ((Component)gun).GetComponentsInChildren<Renderer>())
+            {
+                foreach (Material mat in (Il2CppArrayBase<Material>)(object)r.materials)
+                {
+                    int id = ((Object)mat).GetInstanceID();
+                    if (!_origMatData.TryGetValue(id, out var orig)) continue;
+                    if (orig.hasBaseMap) { mat.SetTexture("_BaseMap", orig.baseMap); mat.SetTextureOffset("_BaseMap", orig.baseMapOffset); }
+                    if (orig.hasMainTex) { mat.SetTexture("_MainTex", orig.mainTex); mat.SetTextureOffset("_MainTex", orig.mainTexOffset); }
+                }
+            }
+        }
+
+        public static void UpdateTextureScroll()
+        {
+            if (TextureMode == 0 || TexScrollSpeed <= 0f) return;
+            try
+            {
+                ScrollTexOnHand(Player.LeftHand);
+                ScrollTexOnHand(Player.RightHand);
+            }
+            catch { }
+        }
+
+        private static void ScrollTexOnHand(Hand hand)
+        {
+            if (hand == null) return;
+            Gun gun = Player.GetComponentInHand<Gun>(hand);
+            if (gun == null) return;
+            float offset = Time.time * TexScrollSpeed;
+            Vector2 off = new Vector2(offset, 0f);
+            foreach (Renderer r in ((Component)gun).GetComponentsInChildren<Renderer>())
+            {
+                if (r is ParticleSystemRenderer || r is TrailRenderer) continue;
+                foreach (Material mat in (Il2CppArrayBase<Material>)(object)r.materials)
+                {
+                    if (mat.HasProperty("_BaseMap"))
+                        mat.SetTextureOffset("_BaseMap", off);
+                    if (mat.HasProperty("_MainTex"))
+                        mat.SetTextureOffset("_MainTex", off);
+                }
+            }
+        }
+
+        // Backward-compatible alias
+        public static bool PurpleGuns
+        {
+            get => CustomGunColorEnabled;
+            set => CustomGunColorEnabled = value;
+        }
+
+        // Original material state cache (keyed by material instance ID)
+        private struct MatOriginal
+        {
+            public Color color;
+            public Color baseColor;
+            public float metallic;
+            public float smoothness;
+            public bool emissionKeyword;
+            public Color emissionColor;
+            public MaterialGlobalIlluminationFlags giFlags;
+            public Texture emissionMap;
+            public Texture baseMap;
+            public Texture mainTex;
+            public Texture metallicGlossMap;
+            public Texture bumpMap;
+            public Texture occlusionMap;
+            public float surface;
+            public float srcBlend;
+            public float dstBlend;
+            public float zWrite;
+            public int renderQueue;
+            public bool hasBaseColor;
+            public bool hasBaseMap;
+            public bool hasMainTex;
+            public bool hasMetallicGlossMap;
+            public bool hasBumpMap;
+            public bool hasOcclusionMap;
+            public bool hasSurface;
+            public bool hasSrcBlend;
+            public bool hasDstBlend;
+            public bool hasZWrite;
+            public Vector2 baseMapOffset;
+            public Vector2 mainTexOffset;
+        }
+        private static Dictionary<int, MatOriginal> _origMatData = new Dictionary<int, MatOriginal>();
+
         // Sub-feature toggles (use properties so we can restore on disable)
-        public static bool PurpleGuns = false;
         public static bool NoRecoil = false;
         public static bool NoReload = false;
 
@@ -76,7 +437,6 @@ namespace BonelabUtilityMod
 
         // Rainbow hue state for glow guns (cycles 0→1 over time)
         private static float _glowHue = 0f;
-        private const float GLOW_CYCLE_SPEED = 0.25f; // full cycle every 4 seconds
 
         /// <summary>
         /// Per-frame fallback that applies effects to held guns.
@@ -84,13 +444,18 @@ namespace BonelabUtilityMod
         /// </summary>
         public static void Update()
         {
-            bool anyFeature = PurpleGuns || InsaneDamage || NoRecoil || InsaneFirerate || NoWeight || GunsBounce || NoReload;
-            if (!anyFeature) return;
+            bool anyFeature = CustomGunColorEnabled || InsaneDamage || NoRecoil || InsaneFirerate || NoWeight || GunsBounce || NoReload;
+            bool texScroll = TextureMode > 0 && TexScrollSpeed > 0f;
+            if (!anyFeature && !texScroll) return;
 
             // Advance rainbow hue each frame
-            if (PurpleGuns)
-                _glowHue = (_glowHue + GLOW_CYCLE_SPEED * Time.deltaTime) % 1f;
+            if (CustomGunColorEnabled && RainbowEnabled)
+                _glowHue = (_glowHue + RainbowSpeed * Time.deltaTime) % 1f;
 
+            // Texture UV scrolling
+            if (texScroll) UpdateTextureScroll();
+
+            if (!anyFeature) return;
             try
             {
                 ProcessHeldGun(Player.LeftHand);
@@ -113,15 +478,11 @@ namespace BonelabUtilityMod
                 if (NoWeight) ApplyNoWeight(gun);
                 if (GunsBounce) ApplyBounce(gun);
 
-                if (PurpleGuns)
+                if (CustomGunColorEnabled)
                 {
-                    int id = ((Object)gun).GetInstanceID();
-                    if (!_cachedRenderers.TryGetValue(id, out var renderers))
-                    {
-                        renderers = ((Component)gun).GetComponentsInChildren<Renderer>();
-                        _cachedRenderers[id] = renderers;
-                    }
-                    ApplyGlowRainbow(renderers);
+                    // Don't cache renderers — magazine insertions change the child hierarchy
+                    var renderers = ((Component)gun).GetComponentsInChildren<Renderer>();
+                    ApplyCustomColor(renderers, ((Component)gun).transform);
                 }
             }
             catch { }
@@ -138,6 +499,9 @@ namespace BonelabUtilityMod
             _origFirerate.Clear();
             _origRbData.Clear();
             _origColliderData.Clear();
+            _origMatData.Clear();
+            _origShaders.Clear();
+            _shadersDirty = true;
         }
 
         // ── Harmony Patches (supplementary — may not fire on all IL2CPP builds) ──
@@ -148,6 +512,7 @@ namespace BonelabUtilityMod
         {
             ApplyDamage(__instance);
             ApplyNoReload(__instance);
+            RecoilRagdollController.OnGunFired(__instance);
         }
 
         [HarmonyPatch(typeof(Gun), "OnTriggerGripAttached")]
@@ -183,6 +548,19 @@ namespace BonelabUtilityMod
             ApplyBounceMag(__instance);
             ApplyPurpleMag(__instance);
             ApplyNoWeightMag(__instance);
+        }
+
+        [HarmonyPatch(typeof(Gun), "OnMagazineInserted")]
+        [HarmonyPostfix]
+        public static void OnMagInserted(Gun __instance)
+        {
+            if (!CustomGunColorEnabled) return;
+            try
+            {
+                // Apply custom color to the entire gun + inserted magazine hierarchy
+                ApplyCustomColor(((Component)__instance).GetComponentsInChildren<Renderer>(), ((Component)__instance).transform);
+            }
+            catch { }
         }
 
         // ── Feature Implementations ──
@@ -360,29 +738,285 @@ namespace BonelabUtilityMod
 
         private static void ApplyPurple(Gun gun)
         {
-            if (!PurpleGuns) return;
-            ApplyGlowRainbow(((Component)gun).GetComponentsInChildren<Renderer>());
+            if (!CustomGunColorEnabled) return;
+            ApplyCustomColor(((Component)gun).GetComponentsInChildren<Renderer>(), ((Component)gun).transform);
         }
 
-        private static void ApplyGlowRainbow(Il2CppArrayBase<Renderer> renderers)
+        private static void CacheMatOriginal(Material mat, int id)
         {
-            Color baseColor = Color.HSVToRGB(_glowHue, 1f, 1f);
-            // HDR emission — multiplier > 1 produces bloom
-            Color emission = baseColor * 4f;
-            foreach (Renderer renderer in renderers)
+            if (_origMatData.ContainsKey(id)) return;
+            var orig = new MatOriginal
+            {
+                color = mat.color,
+                metallic = mat.HasProperty("_Metallic") ? mat.GetFloat("_Metallic") : 0f,
+                smoothness = mat.HasProperty("_Smoothness") ? mat.GetFloat("_Smoothness") : 0.5f,
+                emissionKeyword = mat.IsKeywordEnabled("_EMISSION"),
+                emissionColor = mat.HasProperty("_EmissionColor") ? mat.GetColor("_EmissionColor") : Color.black,
+                giFlags = mat.globalIlluminationFlags,
+                emissionMap = mat.HasProperty("_EmissionMap") ? mat.GetTexture("_EmissionMap") : null,
+                renderQueue = mat.renderQueue,
+                hasBaseColor = mat.HasProperty("_BaseColor"),
+                hasSurface = mat.HasProperty("_Surface"),
+                hasSrcBlend = mat.HasProperty("_SrcBlend"),
+                hasDstBlend = mat.HasProperty("_DstBlend"),
+                hasZWrite = mat.HasProperty("_ZWrite")
+            };
+            orig.hasBaseMap = mat.HasProperty("_BaseMap");
+            orig.hasMainTex = mat.HasProperty("_MainTex");
+            orig.hasMetallicGlossMap = mat.HasProperty("_MetallicGlossMap");
+            orig.hasBumpMap = mat.HasProperty("_BumpMap");
+            orig.hasOcclusionMap = mat.HasProperty("_OcclusionMap");
+            if (orig.hasBaseColor) orig.baseColor = mat.GetColor("_BaseColor");
+            if (orig.hasBaseMap) orig.baseMap = mat.GetTexture("_BaseMap");
+            if (orig.hasMainTex) orig.mainTex = mat.GetTexture("_MainTex");
+            if (orig.hasMetallicGlossMap) orig.metallicGlossMap = mat.GetTexture("_MetallicGlossMap");
+            if (orig.hasBumpMap) orig.bumpMap = mat.GetTexture("_BumpMap");
+            if (orig.hasOcclusionMap) orig.occlusionMap = mat.GetTexture("_OcclusionMap");
+            if (orig.hasBaseMap) orig.baseMapOffset = mat.GetTextureOffset("_BaseMap");
+            if (orig.hasMainTex) orig.mainTexOffset = mat.GetTextureOffset("_MainTex");
+            if (orig.hasSurface) orig.surface = mat.GetFloat("_Surface");
+            if (orig.hasSrcBlend) orig.srcBlend = mat.GetFloat("_SrcBlend");
+            if (orig.hasDstBlend) orig.dstBlend = mat.GetFloat("_DstBlend");
+            if (orig.hasZWrite) orig.zWrite = mat.GetFloat("_ZWrite");
+            _origMatData[id] = orig;
+        }
+
+        private static void RestoreCustomColor()
+        {
+            try
+            {
+                RestoreCustomColorOnHeld(Player.LeftHand);
+                RestoreCustomColorOnHeld(Player.RightHand);
+            }
+            catch { }
+            _origMatData.Clear();
+        }
+
+        private static void RestoreCustomColorOnHeld(Hand hand)
+        {
+            if (hand == null) return;
+            Gun gun = Player.GetComponentInHand<Gun>(hand);
+            if (gun == null) return;
+            foreach (Renderer renderer in ((Component)gun).GetComponentsInChildren<Renderer>())
             {
                 foreach (Material mat in (Il2CppArrayBase<Material>)(object)renderer.materials)
                 {
-                    mat.color = baseColor;
+                    int id = ((Object)mat).GetInstanceID();
+                    if (!_origMatData.TryGetValue(id, out var orig)) continue;
+
+                    mat.color = orig.color;
+                    if (orig.hasBaseColor) mat.SetColor("_BaseColor", orig.baseColor);
+                    if (orig.hasBaseMap) mat.SetTexture("_BaseMap", orig.baseMap);
+                    if (orig.hasMainTex) mat.SetTexture("_MainTex", orig.mainTex);
+                    if (orig.hasMetallicGlossMap) mat.SetTexture("_MetallicGlossMap", orig.metallicGlossMap);
+                    if (orig.hasBumpMap) mat.SetTexture("_BumpMap", orig.bumpMap);
+                    if (orig.hasOcclusionMap) mat.SetTexture("_OcclusionMap", orig.occlusionMap);
+                    mat.SetFloat("_Metallic", orig.metallic);
+                    mat.SetFloat("_Smoothness", orig.smoothness);
+
+                    // Restore emission state
+                    if (orig.emissionKeyword)
+                        mat.EnableKeyword("_EMISSION");
+                    else
+                        mat.DisableKeyword("_EMISSION");
+                    mat.SetColor("_EmissionColor", orig.emissionColor);
+                    mat.globalIlluminationFlags = orig.giFlags;
+                    if (mat.HasProperty("_EmissionMap"))
+                        mat.SetTexture("_EmissionMap", orig.emissionMap);
+
+                    // Restore transparency state
+                    if (orig.hasSurface) mat.SetFloat("_Surface", orig.surface);
+                    mat.DisableKeyword("_SURFACE_TYPE_TRANSPARENT");
+                    if (orig.hasSrcBlend) mat.SetFloat("_SrcBlend", orig.srcBlend);
+                    if (orig.hasDstBlend) mat.SetFloat("_DstBlend", orig.dstBlend);
+                    if (orig.hasZWrite) mat.SetFloat("_ZWrite", orig.zWrite);
+                    mat.renderQueue = orig.renderQueue;
+                }
+            }
+        }
+
+        private static void ApplyCustomColor(Il2CppArrayBase<Renderer> renderers, Transform root)
+        {
+            // ── Pre-compute gradient axis if enabled ──
+            float minProj = float.MaxValue, maxProj = float.MinValue;
+            Vector3 rootPos = Vector3.zero, rootFwd = Vector3.forward;
+            if (GradientEnabled && root != null)
+            {
+                rootPos = root.position;
+                rootFwd = root.forward;
+                foreach (Renderer r in renderers)
+                {
+                    float p = Vector3.Dot(r.transform.position - rootPos, rootFwd);
+                    if (p < minProj) minProj = p;
+                    if (p > maxProj) maxProj = p;
+                }
+            }
+            float projRange = maxProj - minProj;
+            float gradAnimOffset = Time.time * GradientSpeed;
+
+            // Determine base color: rainbow cycle or static RGB
+            Color baseColor;
+            if (RainbowEnabled)
+                baseColor = Color.HSVToRGB(_glowHue, 1f, 1f);
+            else
+                baseColor = new Color(ColorR, ColorG, ColorB, 1f);
+
+            // Apply transparency alpha
+            if (TransparencyEnabled)
+                baseColor.a = 1f - TransparencyAmount;
+
+            foreach (Renderer renderer in renderers)
+            {
+                // ── Per-renderer gradient color ──
+                Color rendColor = baseColor;
+                if (GradientEnabled && root != null && projRange > 0.001f)
+                {
+                    float proj = Vector3.Dot(renderer.transform.position - rootPos, rootFwd);
+                    float t = (proj - minProj) / projRange;
+                    if (RainbowEnabled)
+                    {
+                        // Rainbow wave: offset hue by position
+                        rendColor = Color.HSVToRGB((_glowHue + t * GradientSpread) % 1f, 1f, 1f);
+                    }
+                    else
+                    {
+                        // Custom two-color gradient with flow animation
+                        float animT = (t * GradientSpread + gradAnimOffset) % 1f;
+                        Color colorA = new Color(ColorR, ColorG, ColorB, 1f);
+                        Color colorB = new Color(Color2R, Color2G, Color2B, 1f);
+                        rendColor = Color.Lerp(colorA, colorB, Mathf.PingPong(animT * 2f, 1f));
+                    }
+                    if (TransparencyEnabled)
+                        rendColor.a = 1f - TransparencyAmount;
+                }
+
+                // Particle/trail renderers: only tint color, don't strip textures or change material props
+                if (renderer is ParticleSystemRenderer || renderer is TrailRenderer)
+                {
+                    foreach (Material mat in (Il2CppArrayBase<Material>)(object)renderer.materials)
+                    {
+                        mat.color = rendColor;
+                        if (mat.HasProperty("_BaseColor"))
+                            mat.SetColor("_BaseColor", rendColor);
+                        if (mat.HasProperty("_TintColor"))
+                            mat.SetColor("_TintColor", rendColor);
+                    }
+                    continue;
+                }
+
+                foreach (Material mat in (Il2CppArrayBase<Material>)(object)renderer.materials)
+                {
+                    // Skip materials with particle/sprite/additive shaders (VFX overlay)
+                    string shaderName = mat.shader != null ? mat.shader.name : "";
+                    if (shaderName.Contains("Particle") || shaderName.Contains("Sprite") ||
+                        shaderName.Contains("Additive") || shaderName.Contains("Distortion"))
+                    {
+                        // Still tint the color
+                        mat.color = rendColor;
+                        if (mat.HasProperty("_BaseColor"))
+                            mat.SetColor("_BaseColor", rendColor);
+                        if (mat.HasProperty("_TintColor"))
+                            mat.SetColor("_TintColor", rendColor);
+                        continue;
+                    }
+                    // Skip scope/lens/stencil shaders and pre-existing transparent materials
+                    if (shaderName.Contains("Scope") || shaderName.Contains("Lens") ||
+                        shaderName.Contains("Reticle") || shaderName.Contains("Holographic") ||
+                        shaderName.Contains("Refract") || shaderName.Contains("Stencil"))
+                        continue;
+                    // Skip lens/reticle materials by name (modded guns use material names)
+                    string matName = mat.name.ToLower();
+                    if (matName.Contains("lens") || matName.Contains("reticle") ||
+                        matName.Contains("sight_glass") || matName.Contains("optic_glass") ||
+                        matName.Contains("scope_glass") || matName.Contains("holographic"))
+                        continue;
+                    // Skip pre-existing transparent materials UNLESS we previously modified them
+                    if (!TransparencyEnabled && mat.renderQueue >= 2450)
+                    {
+                        int checkId = ((Object)mat).GetInstanceID();
+                        if (!_origMatData.ContainsKey(checkId) || _origMatData[checkId].renderQueue >= 2450)
+                            continue;
+                        // Fall through — we set this renderQueue, need to restore it
+                    }
+
+                    int matId = ((Object)mat).GetInstanceID();
+                    CacheMatOriginal(mat, matId);
+
+                    mat.color = rendColor;
                     if (mat.HasProperty("_BaseColor"))
-                        mat.SetColor("_BaseColor", baseColor);
+                        mat.SetColor("_BaseColor", rendColor);
+                    // Strip albedo textures so flat color shows through
+                    if (mat.HasProperty("_BaseMap"))
+                        mat.SetTexture("_BaseMap", null);
+                    if (mat.HasProperty("_MainTex"))
+                        mat.SetTexture("_MainTex", null);
 
-                    mat.SetFloat("_Metallic", 1f);
-                    mat.SetFloat("_Smoothness", 1f);
+                    // ── Reflection ──
+                    if (ReflectionEnabled)
+                    {
+                        if (mat.HasProperty("_MetallicGlossMap"))
+                            mat.SetTexture("_MetallicGlossMap", null);
+                        if (mat.HasProperty("_BumpMap"))
+                            mat.SetTexture("_BumpMap", null);
+                        if (mat.HasProperty("_OcclusionMap"))
+                            mat.SetTexture("_OcclusionMap", null);
+                        mat.SetFloat("_Metallic", 1f);
+                        mat.SetFloat("_Smoothness", 1f);
+                    }
+                    else if (_origMatData.TryGetValue(matId, out var origRef))
+                    {
+                        if (origRef.hasMetallicGlossMap) mat.SetTexture("_MetallicGlossMap", origRef.metallicGlossMap);
+                        if (origRef.hasBumpMap) mat.SetTexture("_BumpMap", origRef.bumpMap);
+                        if (origRef.hasOcclusionMap) mat.SetTexture("_OcclusionMap", origRef.occlusionMap);
+                        mat.SetFloat("_Metallic", origRef.metallic);
+                        mat.SetFloat("_Smoothness", origRef.smoothness);
+                    }
 
-                    mat.EnableKeyword("_EMISSION");
-                    mat.SetColor("_EmissionColor", emission);
-                    mat.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
+                    // ── Emission ──
+                    if (EmissionEnabled)
+                    {
+                        Color emission = rendColor * EmissionIntensity;
+                        mat.EnableKeyword("_EMISSION");
+                        mat.SetColor("_EmissionColor", emission);
+                        mat.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
+                        if (mat.HasProperty("_EmissionMap"))
+                            mat.SetTexture("_EmissionMap", null);
+                    }
+                    else if (_origMatData.TryGetValue(matId, out var origEm))
+                    {
+                        if (origEm.emissionKeyword)
+                            mat.EnableKeyword("_EMISSION");
+                        else
+                            mat.DisableKeyword("_EMISSION");
+                        mat.SetColor("_EmissionColor", origEm.emissionColor);
+                        mat.globalIlluminationFlags = origEm.giFlags;
+                        if (mat.HasProperty("_EmissionMap"))
+                            mat.SetTexture("_EmissionMap", origEm.emissionMap);
+                    }
+
+                    // ── Transparency ──
+                    if (TransparencyEnabled)
+                    {
+                        if (mat.HasProperty("_Surface"))
+                            mat.SetFloat("_Surface", 1f);
+                        mat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+                        if (mat.HasProperty("_SrcBlend"))
+                            mat.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.SrcAlpha);
+                        if (mat.HasProperty("_DstBlend"))
+                            mat.SetFloat("_DstBlend", (float)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+                        if (mat.HasProperty("_ZWrite"))
+                            mat.SetFloat("_ZWrite", 0f);
+                        mat.renderQueue = 3000;
+                    }
+                    else if (_origMatData.TryGetValue(matId, out var origTr))
+                    {
+                        if (origTr.hasSurface) mat.SetFloat("_Surface", origTr.surface);
+                        mat.DisableKeyword("_SURFACE_TYPE_TRANSPARENT");
+                        if (origTr.hasSrcBlend) mat.SetFloat("_SrcBlend", origTr.srcBlend);
+                        if (origTr.hasDstBlend) mat.SetFloat("_DstBlend", origTr.dstBlend);
+                        if (origTr.hasZWrite) mat.SetFloat("_ZWrite", origTr.zWrite);
+                        mat.renderQueue = origTr.renderQueue;
+                    }
                 }
             }
         }
@@ -407,8 +1041,8 @@ namespace BonelabUtilityMod
 
         private static void ApplyPurpleMag(Magazine mag)
         {
-            if (!PurpleGuns) return;
-            ApplyGlowRainbow(((Component)mag).GetComponentsInChildren<Renderer>());
+            if (!CustomGunColorEnabled) return;
+            ApplyCustomColor(((Component)mag).GetComponentsInChildren<Renderer>(), ((Component)mag).transform);
         }
 
         private static void ApplyNoWeightMag(Magazine mag)

@@ -8,9 +8,13 @@ using Il2CppSLZ.Marrow.Data;
 using LabFusion.Network;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Reflection;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -85,7 +89,7 @@ namespace BonelabUtilityMod
         internal const string Name = "OwO";
         internal const string Description = "Bullshit Client for people with schizophrenia";
         internal const string Author = "XI";
-        internal const string Version = "4.4.2";
+        internal const string Version = "4.5.0";
 
         private static readonly string[] _emoticons = { "UwU", "QwQ", ".w.", "^w^", ";w;", "=w=", "-w-", "0w0", "7w7", "XwX" };
         private static int _emoticonIndex = 0;
@@ -130,16 +134,52 @@ namespace BonelabUtilityMod
 
         // ── Remote Whitelist ──
 #if !NO_WHITELIST
-        // XOR-encoded whitelist URL (plaintext never appears in compiled DLL)
-        private const byte XOR_KEY = 0xC7;
-        private static readonly byte[] _encodedWhitelistUrl = { 0xAF, 0xB2, 0xB1, 0xB4, 0xB0, 0xF8, 0xEE, 0xEF, 0xA8, 0xA7, 0xBE, 0xB8, 0xE5, 0xAD, 0xA0, 0xBC, 0xBF, 0xA3, 0xB7, 0xA1, 0xA0, 0xB7, 0xA3, 0xB3, 0xB0, 0xB0, 0xA9, 0xB9, 0xB5, 0xAE, 0xF7, 0xBB, 0xA8, 0xAB, 0xEA, 0x88, 0xA2, 0xB0, 0xA6, 0xA5, 0xBB, 0xAF, 0xAE, 0xB8, 0xE4, 0xF3, 0xFE, 0xFD, 0xE4, 0xB5, 0xE2, 0xE6, 0xE3, 0xB6, 0xB0, 0xB4, 0xE7, 0xBB, 0xE5, 0xB8, 0xEE, 0xEE, 0xBB, 0xBE, 0xA4, 0xA0, 0xF3, 0xFD, 0xA5, 0xA6, 0xF9, 0xF9, 0xFF, 0xF7, 0xF5, 0xAF, 0xA8, 0xE5, 0xBB, 0xA9, 0xA0, 0xF9, 0xB2, 0xBD, 0xA0, 0xA6, 0xB7, 0xB9, 0xB3, 0xBB, 0xEC, 0xF2, 0xAF, 0xA2, 0xAD };
+        // AES-256-CBC encrypted whitelist URL (plaintext never appears in compiled DLL)
+        private static readonly byte[] _aesKey = { 0x5A, 0xF4, 0x45, 0x79, 0x89, 0x7E, 0x69, 0x2C, 0x0B, 0x32, 0x1E, 0x66, 0x5A, 0x12, 0x7E, 0xED, 0xA4, 0x5A, 0xC2, 0xD6, 0xC2, 0x5A, 0x30, 0x54, 0x15, 0x22, 0xC5, 0xA1, 0x49, 0x3C, 0x3E, 0x54 };
+        private static readonly byte[] _aesIv = { 0xD3, 0xCF, 0xBB, 0x40, 0x16, 0x8D, 0x5B, 0x9D, 0x15, 0x93, 0x0E, 0x2E, 0xCB, 0x7E, 0x49, 0xBC };
+        private static readonly byte[] _encWhitelistUrl = { 0x79, 0x08, 0x21, 0xF6, 0xBC, 0xEA, 0xA3, 0x94, 0x97, 0xDB, 0x01, 0xCD, 0xC9, 0x37, 0xEA, 0xFE, 0xC3, 0x96, 0x0C, 0xEB, 0xAD, 0xE4, 0x07, 0x74, 0xE7, 0x08, 0x60, 0xF3, 0x6A, 0x50, 0x54, 0x37, 0xF5, 0xC8, 0x2E, 0xD2, 0x1C, 0x69, 0xB6, 0x9F, 0x2F, 0x69, 0x73, 0x64, 0x19, 0xB0, 0x0A, 0x59, 0xED, 0xC2, 0xD8, 0x23, 0x42, 0x70, 0x1C, 0x1D, 0xE3, 0x83, 0x81, 0x68, 0xC1, 0x5F, 0x70, 0x1D, 0x09, 0x8E, 0x68, 0xA0, 0x8D, 0x1D, 0xA1, 0x25, 0xE3, 0xE5, 0x24, 0x39, 0x78, 0xB3, 0xE2, 0x1A, 0x07, 0xBF, 0xCA, 0xB1, 0x91, 0x63, 0xF3, 0xD1, 0x9A, 0xB4, 0x3A, 0x4E, 0xB0, 0x7A, 0x30, 0x65 };
 
-        private static string DecodeXor(byte[] data)
+        private static string DecryptAes(byte[] cipher, byte[] key, byte[] iv)
         {
-            char[] c = new char[data.Length];
-            for (int i = 0; i < data.Length; i++)
-                c[i] = (char)(data[i] ^ XOR_KEY ^ (byte)(i & 0x1F));
-            return new string(c);
+            using var aes = Aes.Create();
+            aes.Key = key;
+            aes.IV = iv;
+            aes.Mode = CipherMode.CBC;
+            aes.Padding = PaddingMode.PKCS7;
+            using var dec = aes.CreateDecryptor();
+            byte[] plain = dec.TransformFinalBlock(cipher, 0, cipher.Length);
+            return Encoding.UTF8.GetString(plain);
+        }
+
+        // ── Anti-Tamper: SHA-256 integrity check on own assembly ──
+        private static byte[] _expectedHash = null;   // set post-build via build script
+        private static bool _integrityChecked = false;
+
+        private static bool VerifyIntegrity()
+        {
+            if (_integrityChecked) return true;
+            try
+            {
+                string asmPath = Assembly.GetExecutingAssembly().Location;
+                if (string.IsNullOrEmpty(asmPath) || !File.Exists(asmPath)) return true; // can't verify if loaded from memory
+                byte[] dllBytes = File.ReadAllBytes(asmPath);
+                using var sha = SHA256.Create();
+                byte[] hash = sha.ComputeHash(dllBytes);
+                _integrityChecked = true;
+                // If no expected hash is embedded (first build), skip check
+                if (_expectedHash == null || _expectedHash.Length != 32) return true;
+                return hash.SequenceEqual(_expectedHash);
+            }
+            catch { return true; } // Don't block on IO errors
+        }
+
+        // ── Anti-Debug: periodic debugger attachment check ──
+        private static float _lastDebugCheck = 0f;
+        private const float DEBUG_CHECK_INTERVAL = 5f;
+
+        private static bool IsDebuggerPresent()
+        {
+            return Debugger.IsAttached || Debugger.IsLogging();
         }
 
         // Remote whitelist (populated from URL fetch)
@@ -192,6 +232,7 @@ namespace BonelabUtilityMod
             ServerQueueController.Initialize();
             PlayerInfoController.Initialize();
             RagdollController.Initialize();
+            AutoUpdaterController.Initialize();
             BlockController.Initialize();
             KeybindManager.Initialize();
             PlayerTargeting.Initialize();
@@ -217,6 +258,7 @@ namespace BonelabUtilityMod
             SpawnLoggerController.Initialize();
             DamageMultiplierController.Initialize();
             AINpcController.Initialize();
+            RagdollReloadController.Initialize();
             AvatarLoggerController.Initialize();
             PlayerActionLoggerController.Initialize();
 
@@ -227,6 +269,13 @@ namespace BonelabUtilityMod
 
             // Start remote whitelist fetch, then check whitelist
 #if !NO_WHITELIST
+            // Anti-tamper: verify DLL integrity before proceeding
+            if (!VerifyIntegrity())
+            {
+                MelonLog.Warning("Integrity check failed — mod disabled");
+                return;
+            }
+
             FetchRemoteWhitelistAsync();
 
             // Try whitelist check immediately (may fail if Steam not ready or fetch pending)
@@ -318,7 +367,7 @@ namespace BonelabUtilityMod
                 {
                     using var client = new HttpClient();
                     client.Timeout = TimeSpan.FromSeconds(15);
-                    string url = DecodeXor(_encodedWhitelistUrl) + "?t=" + DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                    string url = DecryptAes(_encWhitelistUrl, _aesKey, _aesIv) + "?t=" + DateTimeOffset.UtcNow.ToUnixTimeSeconds();
                     string response = client.GetStringAsync(url).GetAwaiter().GetResult();
 
                     var ids = new HashSet<ulong>();
@@ -615,6 +664,17 @@ namespace BonelabUtilityMod
         public override void OnUpdate()
         {
 #if !NO_WHITELIST
+            // Anti-debug: periodically check for attached debuggers
+            if (Time.time - _lastDebugCheck >= DEBUG_CHECK_INTERVAL)
+            {
+                _lastDebugCheck = Time.time;
+                if (IsDebuggerPresent())
+                {
+                    _whitelistPassed = false;
+                    return;
+                }
+            }
+
             // Keep retrying until whitelist passes — SteamID or fetch may not be ready yet
             if (!_whitelistPassed)
             {
@@ -639,6 +699,8 @@ namespace BonelabUtilityMod
             DespawnAllController.Update();
             PlayerInfoController.Update();
             RagdollController.Update();
+            RecoilRagdollController.Update();
+            RagdollReloadController.Update();
             BodyLogColorController.Update();
             KeybindManager.Update();
             BlockController.Update();
@@ -664,6 +726,8 @@ namespace BonelabUtilityMod
             PlayerActionLoggerController.Update();
             OverlayMenu.CheckInput();
             QuickMenuController.CheckInput();
+            VROverlayMenu.CheckInput();
+            VROverlayMenu.UpdatePanel();
 
             UpdateCyclingNickname();
 
@@ -692,8 +756,10 @@ namespace BonelabUtilityMod
             try { ExplosiveImpactController.OnLevelUnloaded(); } catch { }
             try { XYZScaleController.OnLevelUnloaded(); } catch { }
             try { BunnyHopController.OnLevelUnloaded(); } catch { }
+            try { RecoilRagdollController.OnLevelUnloaded(); } catch { }
             try { SpinbotController.OnLevelUnloaded(); } catch { }
             try { AntiTeleportController.OnLevelUnloaded(); } catch { }
+            try { VROverlayMenu.OnLevelUnloaded(); } catch { }
         }
 
         public override void OnGUI()
@@ -760,7 +826,12 @@ namespace BonelabUtilityMod
                 );
 
                 // ============================================
-                // PLAYER submenu (God Mode, Anti-Constraint, Anti-Knockout, Unbreakable Grip)
+                // MOVEMENT submenu
+                // ============================================
+                var movementPage = _mainPage.CreatePage("Movement", Color.cyan);
+
+                // ============================================
+                // PLAYER submenu
                 // ============================================
                 var playerPage = _mainPage.CreatePage("Player", Color.green);
 
@@ -812,7 +883,7 @@ namespace BonelabUtilityMod
                     AntiTeleportController.Enabled,
                     (value) => { AntiTeleportController.Enabled = value; SettingsManager.MarkDirty(); }
                 );
-                playerPage.CreateBool(
+                movementPage.CreateBool(
                     "Auto Run",
                     Color.green,
                     AutoRunController.Enabled,
@@ -861,22 +932,8 @@ namespace BonelabUtilityMod
                     () => DefaultWorldController.ClearDefault()
                 );
 
-                // Auto Host Friends-Only submenu inside Player
-                var autoHostPage = playerPage.CreatePage("Auto Host", Color.green);
-                autoHostPage.CreateBool(
-                    "Enabled",
-                    Color.white,
-                    AutoHostController.Enabled,
-                    (value) => { AutoHostController.Enabled = value; SettingsManager.MarkDirty(); }
-                );
-                autoHostPage.CreateFunction(
-                    "Hosts a friends-only lobby on game launch",
-                    Color.gray,
-                    () => { }
-                );
-
                 // Dash submenu inside Player
-                var dashPage = playerPage.CreatePage("Dash", Color.cyan);
+                var dashPage = movementPage.CreatePage("Dash", Color.cyan);
                 dashPage.CreateBool(
                     "Enabled",
                     Color.white,
@@ -1015,7 +1072,7 @@ namespace BonelabUtilityMod
                     (value) => { DashController.EffectOffsetZ = value; SettingsManager.MarkDirty(); });
 
                 // Flight submenu inside Player
-                var flightPage = playerPage.CreatePage("Flight", Color.yellow);
+                var flightPage = movementPage.CreatePage("Flight", Color.yellow);
                 flightPage.CreateBool(
                     "Enabled",
                     Color.white,
@@ -1150,7 +1207,7 @@ namespace BonelabUtilityMod
                     (value) => { FlightController.EffectOffsetZ = value; SettingsManager.MarkDirty(); });
 
                 // ── Bunny Hop submenu inside Player ──
-                var bhopPage = playerPage.CreatePage("Bunny Hop", Color.cyan);
+                var bhopPage = movementPage.CreatePage("Bunny Hop", Color.cyan);
                 bhopPage.CreateBool(
                     "Enabled",
                     Color.white,
@@ -1174,12 +1231,6 @@ namespace BonelabUtilityMod
                     5f,
                     200f,
                     (value) => { BunnyHopController.MaxSpeed = value; SettingsManager.MarkDirty(); }
-                );
-                bhopPage.CreateEnum(
-                    "Air Strafe Mode",
-                    Color.green,
-                    BunnyHopController.StrafeMode,
-                    (value) => { BunnyHopController.StrafeMode = (AirStrafeMode)value; SettingsManager.MarkDirty(); }
                 );
                 bhopPage.CreateFloat(
                     "Air Strafe Force",
@@ -1215,6 +1266,12 @@ namespace BonelabUtilityMod
                     (value) => { BunnyHopController.AutoHop = value; SettingsManager.MarkDirty(); }
                 );
                 bhopPage.CreateBool(
+                    "Auto Jump Toggle",
+                    Color.cyan,
+                    BunnyHopController.AutoJumpToggle,
+                    (value) => { BunnyHopController.AutoJumpToggle = value; SettingsManager.MarkDirty(); }
+                );
+                bhopPage.CreateBool(
                     "Trimping",
                     Color.yellow,
                     BunnyHopController.TrimpEnabled,
@@ -1231,7 +1288,7 @@ namespace BonelabUtilityMod
                 );
 
                 // ── Spinbot submenu inside Player ──
-                var spinbotPage = playerPage.CreatePage("Spinbot", Color.magenta);
+                var spinbotPage = movementPage.CreatePage("Spinbot", Color.magenta);
                 spinbotPage.CreateBool(
                     "Enabled",
                     Color.white,
@@ -1407,6 +1464,22 @@ namespace BonelabUtilityMod
                     (value) => { RagdollController.WallPushVelocityThreshold = value; SettingsManager.MarkDirty(); }
                 );
 
+                ragdollPage.CreateBool(
+                    "Ragdoll Reload",
+                    Color.green,
+                    RagdollReloadController.Enabled,
+                    (value) => { RagdollReloadController.Enabled = value; SettingsManager.MarkDirty(); }
+                );
+                ragdollPage.CreateFloat(
+                    "Reload Assist Distance",
+                    Color.green,
+                    RagdollReloadController.InsertDistance,
+                    0.01f,
+                    0.05f,
+                    0.5f,
+                    (value) => { RagdollReloadController.InsertDistance = value; SettingsManager.MarkDirty(); }
+                );
+
                 ragdollPage.CreateFunction(
                     "Unragdoll Now",
                     Color.green,
@@ -1422,15 +1495,125 @@ namespace BonelabUtilityMod
                 );
 
                 // ============================================
-                // COMBAT submenu (Full Auto, Ammo, Explosive Punch)
+                // WEAPONS submenu
+                // ============================================
+                var weaponsPage = _mainPage.CreatePage("Weapons", Color.yellow);
+
+                // ============================================
+                // GUN VISUALS submenu
+                // ============================================
+                var gunVisualsPage = _mainPage.CreatePage("Gun Visuals", new Color(1f, 0.5f, 0f));
+
+                // ============================================
+                // COMBAT submenu
                 // ============================================
                 var combatPage = _mainPage.CreatePage("Combat", Color.red);
 
-                // ── Gun Modifier submenu inside Combat ──
-                var gunModifierPage = combatPage.CreatePage("Gun Modifier", Color.cyan);
+                // ── Gun Modifier submenu inside Weapons ──
+                var gunModifierPage = weaponsPage.CreatePage("Gun Modifier", Color.cyan);
 
-                // ── Damage Multiplier submenu inside Combat ──
-                var damageMultPage = combatPage.CreatePage("Damage Multiplier", Color.red);
+                // ── Custom Gun Color submenu inside Gun Visuals ──
+                var customGunColorPage = gunVisualsPage.CreatePage("Custom Gun Color", Color.magenta);
+                customGunColorPage.CreateBool("Enabled", Color.green, ChaosGunController.CustomGunColorEnabled,
+                    (value) => { ChaosGunController.CustomGunColorEnabled = value; SettingsManager.MarkDirty(); });
+                customGunColorPage.CreateBool("Rainbow", Color.cyan, ChaosGunController.RainbowEnabled,
+                    (value) => { ChaosGunController.RainbowEnabled = value; SettingsManager.MarkDirty(); });
+                customGunColorPage.CreateBool("Emission", Color.yellow, ChaosGunController.EmissionEnabled,
+                    (value) => { ChaosGunController.EmissionEnabled = value; SettingsManager.MarkDirty(); });
+                customGunColorPage.CreateBool("Reflection", Color.white, ChaosGunController.ReflectionEnabled,
+                    (value) => { ChaosGunController.ReflectionEnabled = value; SettingsManager.MarkDirty(); });
+                customGunColorPage.CreateBool("Transparency", Color.gray, ChaosGunController.TransparencyEnabled,
+                    (value) => { ChaosGunController.TransparencyEnabled = value; SettingsManager.MarkDirty(); });
+                customGunColorPage.CreateFloat("Transparency Amount", Color.gray, ChaosGunController.TransparencyAmount, 0.05f, 0f, 1f,
+                    (value) => { ChaosGunController.TransparencyAmount = value; SettingsManager.MarkDirty(); });
+                customGunColorPage.CreateFloat("Emission Intensity", Color.yellow, ChaosGunController.EmissionIntensity, 0.5f, 0f, 20f,
+                    (value) => { ChaosGunController.EmissionIntensity = value; SettingsManager.MarkDirty(); });
+                customGunColorPage.CreateFloat("Rainbow Speed", Color.cyan, ChaosGunController.RainbowSpeed, 0.05f, 0.01f, 2f,
+                    (value) => { ChaosGunController.RainbowSpeed = value; SettingsManager.MarkDirty(); });
+                customGunColorPage.CreateFloat("Color R", Color.red, ChaosGunController.ColorR, 0.05f, 0f, 1f,
+                    (value) => { ChaosGunController.ColorR = value; SettingsManager.MarkDirty(); });
+                customGunColorPage.CreateFloat("Color G", Color.green, ChaosGunController.ColorG, 0.05f, 0f, 1f,
+                    (value) => { ChaosGunController.ColorG = value; SettingsManager.MarkDirty(); });
+                customGunColorPage.CreateFloat("Color B", Color.blue, ChaosGunController.ColorB, 0.05f, 0f, 1f,
+                    (value) => { ChaosGunController.ColorB = value; SettingsManager.MarkDirty(); });
+                customGunColorPage.CreateBool("Gradient", Color.cyan, ChaosGunController.GradientEnabled,
+                    (value) => { ChaosGunController.GradientEnabled = value; SettingsManager.MarkDirty(); });
+                customGunColorPage.CreateFloat("Gradient Speed", Color.cyan, ChaosGunController.GradientSpeed, 0.1f, 0f, 5f,
+                    (value) => { ChaosGunController.GradientSpeed = value; SettingsManager.MarkDirty(); });
+                customGunColorPage.CreateFloat("Gradient Spread", Color.cyan, ChaosGunController.GradientSpread, 0.1f, 0.1f, 5f,
+                    (value) => { ChaosGunController.GradientSpread = value; SettingsManager.MarkDirty(); });
+                customGunColorPage.CreateFloat("Color 2 R", Color.red, ChaosGunController.Color2R, 0.05f, 0f, 1f,
+                    (value) => { ChaosGunController.Color2R = value; SettingsManager.MarkDirty(); });
+                customGunColorPage.CreateFloat("Color 2 G", Color.green, ChaosGunController.Color2G, 0.05f, 0f, 1f,
+                    (value) => { ChaosGunController.Color2G = value; SettingsManager.MarkDirty(); });
+                customGunColorPage.CreateFloat("Color 2 B", Color.blue, ChaosGunController.Color2B, 0.05f, 0f, 1f,
+                    (value) => { ChaosGunController.Color2B = value; SettingsManager.MarkDirty(); });
+
+                // ── Shader Library submenu inside Gun Visuals ──
+                var shaderLibPage = gunVisualsPage.CreatePage("Shader Library", Color.cyan);
+                shaderLibPage.CreateBool("Enabled", Color.green, ChaosGunController.ShaderLibraryEnabled,
+                    (value) => { ChaosGunController.ShaderLibraryEnabled = value; SettingsManager.MarkDirty(); });
+                shaderLibPage.CreateFunction(
+                    "Refresh Shader List",
+                    Color.yellow,
+                    ChaosGunController.RefreshShaderList
+                );
+                shaderLibPage.CreateFunction(
+                    $"Current: {ChaosGunController.SelectedShaderName}",
+                    Color.white,
+                    () => { }
+                );
+                shaderLibPage.CreateFunction(
+                    "Next Shader >>",
+                    Color.cyan,
+                    ChaosGunController.NextShader
+                );
+                shaderLibPage.CreateFunction(
+                    "<< Prev Shader",
+                    Color.cyan,
+                    ChaosGunController.PrevShader
+                );
+                shaderLibPage.CreateFunction(
+                    "Apply to Held Gun",
+                    Color.green,
+                    ChaosGunController.ApplyShaderToGun
+                );
+                shaderLibPage.CreateFunction(
+                    "Revert Shaders",
+                    Color.red,
+                    ChaosGunController.RevertShaders
+                );
+
+                // ── Texture Editor submenu inside Gun Visuals ──
+                var texEditorPage = gunVisualsPage.CreatePage("Texture Editor", Color.yellow);
+                texEditorPage.CreateFunction(
+                    $"Mode: {ChaosGunController.TextureModeNames[ChaosGunController.TextureMode]}",
+                    Color.white,
+                    () => { ChaosGunController.TextureMode = (ChaosGunController.TextureMode + 1) % ChaosGunController.TextureModeNames.Length; }
+                );
+                texEditorPage.CreateFloat("Color 2 R", Color.red, ChaosGunController.TexGradR2, 0.05f, 0f, 1f,
+                    (value) => { ChaosGunController.TexGradR2 = value; SettingsManager.MarkDirty(); });
+                texEditorPage.CreateFloat("Color 2 G", Color.green, ChaosGunController.TexGradG2, 0.05f, 0f, 1f,
+                    (value) => { ChaosGunController.TexGradG2 = value; SettingsManager.MarkDirty(); });
+                texEditorPage.CreateFloat("Color 2 B", Color.blue, ChaosGunController.TexGradB2, 0.05f, 0f, 1f,
+                    (value) => { ChaosGunController.TexGradB2 = value; SettingsManager.MarkDirty(); });
+                texEditorPage.CreateFloat("Noise Scale", Color.yellow, ChaosGunController.TexNoiseScale, 1f, 1f, 100f,
+                    (value) => { ChaosGunController.TexNoiseScale = value; SettingsManager.MarkDirty(); });
+                texEditorPage.CreateFloat("Scroll Speed", Color.cyan, ChaosGunController.TexScrollSpeed, 0.05f, 0f, 5f,
+                    (value) => { ChaosGunController.TexScrollSpeed = value; SettingsManager.MarkDirty(); });
+                texEditorPage.CreateFunction(
+                    "Apply to Held Gun",
+                    Color.green,
+                    () => { ChaosGunController.RegenerateTexture(); ChaosGunController.ApplyTextureToGun(); }
+                );
+                texEditorPage.CreateFunction(
+                    "Restore Textures",
+                    Color.red,
+                    ChaosGunController.RestoreTextures
+                );
+
+                // ── Damage Multiplier submenu inside Weapons ──
+                var damageMultPage = weaponsPage.CreatePage("Damage Multiplier", Color.red);
                 damageMultPage.CreateFloat(
                     "Gun Multiplier",
                     Color.yellow,
@@ -1465,20 +1648,18 @@ namespace BonelabUtilityMod
                     }
                 );
 
-                combatPage.CreateBool(
+                weaponsPage.CreateBool(
                     "Full Auto Guns",
                     Color.yellow,
                     FullAutoController.IsFullAutoEnabled,
                     (value) => { FullAutoController.IsFullAutoEnabled = value; SettingsManager.MarkDirty(); }
                 );
-                combatPage.CreateBool(
+                weaponsPage.CreateBool(
                     "Infinite Ammo",
                     Color.green,
                     InfiniteAmmoController.IsEnabled,
                     (value) => { InfiniteAmmoController.IsEnabled = value; SettingsManager.MarkDirty(); }
                 );
-                gunModifierPage.CreateBool("Glow Blue Guns", Color.blue, ChaosGunController.PurpleGuns,
-                    (value) => { ChaosGunController.PurpleGuns = value; SettingsManager.MarkDirty(); });
                 gunModifierPage.CreateBool("Insane Damage!", Color.red, ChaosGunController.InsaneDamage,
                     (value) => { ChaosGunController.InsaneDamage = value; SettingsManager.MarkDirty(); });
                 gunModifierPage.CreateBool("No Recoil!", Color.red, ChaosGunController.NoRecoil,
@@ -2233,7 +2414,7 @@ namespace BonelabUtilityMod
                 // ============================================
                 // TELEPORT submenu (NO level search - REMOVED)
                 // ============================================
-                var teleportPage = playerPage.CreatePage("Teleport", Color.green);
+                var teleportPage = movementPage.CreatePage("Teleport", Color.green);
                 teleportPage.CreateFunction(
                     "Save Position",
                     Color.cyan,
@@ -2313,6 +2494,21 @@ namespace BonelabUtilityMod
                     Color.red,
                     WaypointController.ClearDefaultSpawn
                 );
+
+                // ============================================
+                // RECOIL RAGDOLL submenu
+                // ============================================
+                var recoilRagdollPage = combatPage.CreatePage("Recoil Ragdoll", Color.red);
+                recoilRagdollPage.CreateBool("Enabled", Color.white, RecoilRagdollController.Enabled,
+                    (value) => { RecoilRagdollController.Enabled = value; SettingsManager.MarkDirty(); });
+                recoilRagdollPage.CreateFloat("Delay (s)", Color.cyan, RecoilRagdollController.Delay, 0f, 2f, 0.01f,
+                    (value) => { RecoilRagdollController.Delay = value; SettingsManager.MarkDirty(); });
+                recoilRagdollPage.CreateFloat("Cooldown (s)", Color.cyan, RecoilRagdollController.Cooldown, 0.1f, 10f, 0.1f,
+                    (value) => { RecoilRagdollController.Cooldown = value; SettingsManager.MarkDirty(); });
+                recoilRagdollPage.CreateFloat("Knockback Force", Color.yellow, RecoilRagdollController.ForceMultiplier, 0f, 10f, 0.5f,
+                    (value) => { RecoilRagdollController.ForceMultiplier = value; SettingsManager.MarkDirty(); });
+                recoilRagdollPage.CreateBool("Drop Gun", Color.red, RecoilRagdollController.DropGun,
+                    (value) => { RecoilRagdollController.DropGun = value; SettingsManager.MarkDirty(); });
 
                 // ============================================
                 // COSMETICS top-level page
@@ -2827,7 +3023,26 @@ namespace BonelabUtilityMod
                 BuildSelectPlayerSubMenu(wpHomingPage);
 
                 // ============================================
-                // UTILITIES submenu (Despawn All, Change Map, Avatar Search, Anti-Despawn)
+                // SERVER submenu
+                // ============================================
+                var serverPage = _mainPage.CreatePage("Server", Color.green);
+
+                // Auto Host Friends-Only submenu inside Server
+                var autoHostPage = serverPage.CreatePage("Auto Host", Color.green);
+                autoHostPage.CreateBool(
+                    "Enabled",
+                    Color.white,
+                    AutoHostController.Enabled,
+                    (value) => { AutoHostController.Enabled = value; SettingsManager.MarkDirty(); }
+                );
+                autoHostPage.CreateFunction(
+                    "Hosts a friends-only lobby on game launch",
+                    Color.gray,
+                    () => { }
+                );
+
+                // ============================================
+                // UTILITIES submenu
                 // ============================================
                 var utilitiesPage = _mainPage.CreatePage("Utilities", Color.yellow);
 
@@ -3184,8 +3399,8 @@ namespace BonelabUtilityMod
                     MapChangeController.ReloadLevel
                 );
 
-                // ── Server Queue (inside Utilities) ──
-                var queuePage = utilitiesPage.CreatePage("Server Queue", Color.magenta);
+                // ── Server Queue (inside Server) ──
+                var queuePage = serverPage.CreatePage("Server Queue", Color.magenta);
                 queuePage.CreateBool(
                     "Auto-Queue",
                     Color.green,
@@ -3219,8 +3434,8 @@ namespace BonelabUtilityMod
                     BlockController.FixWobblyAvatar
                 );
 
-                // ── XYZ Scale (inside Utilities) ──
-                var xyzScalePage = utilitiesPage.CreatePage("XYZ Scale", Color.cyan);
+                // ── XYZ Scale (inside Player) ──
+                var xyzScalePage = playerPage.CreatePage("XYZ Scale", Color.cyan);
                 xyzScalePage.CreateBool(
                     "Enabled",
                     Color.green,
@@ -3272,8 +3487,8 @@ namespace BonelabUtilityMod
                     }
                 );
 
-                // ── Disable Avatar FX (inside Utilities) ──
-                utilitiesPage.CreateBool(
+                // ── Disable Avatar FX (inside Cosmetics) ──
+                cosmeticsPage.CreateBool(
                     "Disable Avatar Switch FX",
                     Color.magenta,
                     DisableAvatarFXController.Enabled,
@@ -3585,6 +3800,92 @@ namespace BonelabUtilityMod
                     Color.cyan,
                     SpawnLoggerController.ShowNotifications,
                     (value) => { SpawnLoggerController.ShowNotifications = value; SettingsManager.MarkDirty(); }
+                );
+
+                // ── Spawn Limiter (inside Utilities) ──
+                var spawnLimiterPage = utilitiesPage.CreatePage("Spawn Limiter", Color.red);
+                spawnLimiterPage.CreateBool(
+                    "Enabled",
+                    Color.green,
+                    SpawnLimiterController.Enabled,
+                    (value) => { SpawnLimiterController.Enabled = value; SettingsManager.MarkDirty(); }
+                );
+                spawnLimiterPage.CreateBool(
+                    "Host Only",
+                    Color.yellow,
+                    SpawnLimiterController.HostOnly,
+                    (value) => { SpawnLimiterController.HostOnly = value; SettingsManager.MarkDirty(); }
+                );
+                spawnLimiterPage.CreateFloat(
+                    "Spawn Delay (s)",
+                    Color.cyan,
+                    SpawnLimiterController.SpawnDelay,
+                    0.05f,
+                    0.05f,
+                    5f,
+                    (value) => { SpawnLimiterController.SpawnDelay = value; SettingsManager.MarkDirty(); }
+                );
+                spawnLimiterPage.CreateFloat(
+                    "Max Per Frame",
+                    Color.white,
+                    SpawnLimiterController.MaxPerFrame,
+                    1f,
+                    1f,
+                    50f,
+                    (value) => { SpawnLimiterController.MaxPerFrame = (int)value; SettingsManager.MarkDirty(); }
+                );
+
+                // ============================================
+                // AUTO-UPDATER submenu (inside Utilities)
+                // ============================================
+                var autoUpdaterPage = utilitiesPage.CreatePage("Auto-Updater", Color.cyan);
+                autoUpdaterPage.CreateBool(
+                    "Auto Check",
+                    Color.green,
+                    AutoUpdaterController.AutoCheckEnabled,
+                    (value) => { AutoUpdaterController.AutoCheckEnabled = value; SettingsManager.MarkDirty(); }
+                );
+                autoUpdaterPage.CreateBool(
+                    "Auto Install",
+                    Color.yellow,
+                    AutoUpdaterController.AutoInstallEnabled,
+                    (value) => { AutoUpdaterController.AutoInstallEnabled = value; SettingsManager.MarkDirty(); }
+                );
+                autoUpdaterPage.CreateBool(
+                    "Backup Old DLLs",
+                    Color.cyan,
+                    AutoUpdaterController.BackupOldDlls,
+                    (value) => { AutoUpdaterController.BackupOldDlls = value; SettingsManager.MarkDirty(); }
+                );
+                autoUpdaterPage.CreateBool(
+                    "Notify on Update",
+                    Color.white,
+                    AutoUpdaterController.NotifyOnUpdate,
+                    (value) => { AutoUpdaterController.NotifyOnUpdate = value; SettingsManager.MarkDirty(); }
+                );
+                autoUpdaterPage.CreateFloat(
+                    "Check Interval (hrs)",
+                    Color.cyan,
+                    AutoUpdaterController.CheckIntervalHours,
+                    0.5f,
+                    0.5f,
+                    168f,
+                    (value) => { AutoUpdaterController.CheckIntervalHours = value; SettingsManager.MarkDirty(); }
+                );
+                autoUpdaterPage.CreateFunction(
+                    "Scan Installed DLLs",
+                    Color.green,
+                    () => AutoUpdaterController.RefreshDllList()
+                );
+                autoUpdaterPage.CreateFunction(
+                    "Open Mods Folder",
+                    Color.yellow,
+                    () => AutoUpdaterController.OpenModsFolder()
+                );
+                autoUpdaterPage.CreateFunction(
+                    "Open Backups Folder",
+                    Color.yellow,
+                    () => AutoUpdaterController.OpenBackupsFolder()
                 );
             }
             catch (Exception ex)

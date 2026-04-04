@@ -192,7 +192,8 @@ namespace BonelabUtilityMod
                 "ExplosiveImpact", "DespawnAll", "ObjectLauncher", "ForceGrab",
                 "WaypointProjectile", "DropOnPlayer", "ServerQueue",
                 "BodyLogColor", "ScreenShare", "Keybinds", "CosmeticPresets", "Favorites",
-                "AutoRun", "Spinbot", "BunnyHop", "DefaultWorld", "AutoHost", "XYZScale", "DisableAvatarFX", "HolsterHider"
+                "AutoRun", "Spinbot", "BunnyHop", "DefaultWorld", "AutoHost", "XYZScale", "DisableAvatarFX", "HolsterHider",
+                "BlockItem", "BlockLocal", "VROverlay", "RecoilRagdoll", "RagdollReload", "AutoUpdater"
             };
 
             var written = new HashSet<string>(StringComparer.Ordinal);
@@ -361,13 +362,36 @@ namespace BonelabUtilityMod
 
             SafeExecute(() =>
             {
-                ChaosGunController.PurpleGuns = GetBool("GunModifier", "PurpleGuns", false);
+                ChaosGunController.CustomGunColorEnabled = GetBool("GunModifier", "CustomGunColorEnabled", GetBool("GunModifier", "PurpleGuns", false));
+                ChaosGunController.RainbowEnabled = GetBool("GunModifier", "RainbowEnabled", true);
+                ChaosGunController.EmissionEnabled = GetBool("GunModifier", "EmissionEnabled", true);
+                ChaosGunController.ReflectionEnabled = GetBool("GunModifier", "ReflectionEnabled", true);
+                ChaosGunController.TransparencyEnabled = GetBool("GunModifier", "TransparencyEnabled", false);
+                ChaosGunController.TransparencyAmount = GetFloat("GunModifier", "TransparencyAmount", 0.5f);
+                ChaosGunController.ColorR = GetFloat("GunModifier", "ColorR", 1f);
+                ChaosGunController.ColorG = GetFloat("GunModifier", "ColorG", 0f);
+                ChaosGunController.ColorB = GetFloat("GunModifier", "ColorB", 1f);
+                ChaosGunController.EmissionIntensity = GetFloat("GunModifier", "EmissionIntensity", 4f);
+                ChaosGunController.RainbowSpeed = GetFloat("GunModifier", "RainbowSpeed", 0.25f);
+                ChaosGunController.GradientEnabled = GetBool("GunModifier", "GradientEnabled", false);
+                ChaosGunController.GradientSpeed = GetFloat("GunModifier", "GradientSpeed", 0.5f);
+                ChaosGunController.GradientSpread = GetFloat("GunModifier", "GradientSpread", 1f);
+                ChaosGunController.Color2R = GetFloat("GunModifier", "Color2R", 0f);
+                ChaosGunController.Color2G = GetFloat("GunModifier", "Color2G", 1f);
+                ChaosGunController.Color2B = GetFloat("GunModifier", "Color2B", 0f);
                 ChaosGunController.InsaneDamage = GetBool("GunModifier", "InsaneDamage", false);
                 ChaosGunController.NoRecoil = GetBool("GunModifier", "NoRecoil", false);
                 ChaosGunController.InsaneFirerate = GetBool("GunModifier", "InsaneFirerate", false);
                 ChaosGunController.NoWeight = GetBool("GunModifier", "NoWeight", false);
                 ChaosGunController.GunsBounce = GetBool("GunModifier", "GunsBounce", false);
                 ChaosGunController.NoReload = GetBool("GunModifier", "NoReload", false);
+                ChaosGunController.ShaderLibraryEnabled = GetBool("GunModifier", "ShaderLibraryEnabled", false);
+                ChaosGunController.TextureMode = GetInt("GunModifier", "TextureMode", 0);
+                ChaosGunController.TexGradR2 = GetFloat("GunModifier", "TexGradR2", 0f);
+                ChaosGunController.TexGradG2 = GetFloat("GunModifier", "TexGradG2", 0f);
+                ChaosGunController.TexGradB2 = GetFloat("GunModifier", "TexGradB2", 0f);
+                ChaosGunController.TexNoiseScale = GetFloat("GunModifier", "TexNoiseScale", 10f);
+                ChaosGunController.TexScrollSpeed = GetFloat("GunModifier", "TexScrollSpeed", 0f);
             }, "Load Gun Modifier");
 
             SafeExecute(() =>
@@ -560,8 +584,9 @@ namespace BonelabUtilityMod
             SafeExecute(() =>
             {
                 SpawnLimiterController.Enabled = GetBool("SpawnLimiter", "Enabled", true);
-                SpawnLimiterController.SpawnDelay = GetFloat("SpawnLimiter", "SpawnDelay", 0.75f);
-                SpawnLimiterController.MaxPerFrame = GetInt("SpawnLimiter", "MaxPerFrame", 5);
+                SpawnLimiterController.HostOnly = GetBool("SpawnLimiter", "HostOnly", true);
+                SpawnLimiterController.SpawnDelay = GetFloat("SpawnLimiter", "SpawnDelay", 0.3f);
+                SpawnLimiterController.MaxPerFrame = GetInt("SpawnLimiter", "MaxPerFrame", 3);
             }, "Load Spawn Limiter");
 
             SafeExecute(() =>
@@ -800,7 +825,7 @@ namespace BonelabUtilityMod
                 BunnyHopController.AirStrafeForce = GetFloat("BunnyHop", "AirStrafeForce", 12f);
                 BunnyHopController.JumpForce = GetFloat("BunnyHop", "JumpForce", 5.5f);
                 BunnyHopController.AutoHop = GetBool("BunnyHop", "AutoHop", true);
-                BunnyHopController.StrafeMode = (AirStrafeMode)GetInt("BunnyHop", "StrafeMode", (int)AirStrafeMode.EASY);
+                BunnyHopController.AutoJumpToggle = GetBool("BunnyHop", "AutoJumpToggle", false);
                 BunnyHopController.StandableNormal = GetFloat("BunnyHop", "StandableNormal", 0.7f);
                 BunnyHopController.TrimpEnabled = GetBool("BunnyHop", "TrimpEnabled", true);
                 BunnyHopController.TrimpMultiplier = GetFloat("BunnyHop", "TrimpMultiplier", 1.0f);
@@ -917,8 +942,71 @@ namespace BonelabUtilityMod
 
             SafeExecute(() =>
             {
+                VROverlayMenu.VrOpacity = GetFloat("VROverlay", "Opacity", 0.93f);
+                VROverlayMenu.VrAccentR = GetFloat("VROverlay", "AccentR", 0f);
+                VROverlayMenu.VrAccentG = GetFloat("VROverlay", "AccentG", 0.95f);
+                VROverlayMenu.VrAccentB = GetFloat("VROverlay", "AccentB", 1f);
+                VROverlayMenu.VrBgR = GetFloat("VROverlay", "BgR", 0.05f);
+                VROverlayMenu.VrBgG = GetFloat("VROverlay", "BgG", 0.05f);
+                VROverlayMenu.VrBgB = GetFloat("VROverlay", "BgB", 0.09f);
+                VROverlayMenu.VrRainbow = GetBool("VROverlay", "Rainbow", false);
+                VROverlayMenu.LeftHandDominant = GetBool("VROverlay", "LeftHandDominant", true);
+            }, "Load VROverlay");
+
+            SafeExecute(() =>
+            {
+                RecoilRagdollController.Enabled = GetBool("RecoilRagdoll", "Enabled", false);
+                RecoilRagdollController.Delay = GetFloat("RecoilRagdoll", "Delay", 0.05f);
+                RecoilRagdollController.Cooldown = GetFloat("RecoilRagdoll", "Cooldown", 1.0f);
+                RecoilRagdollController.DropGun = GetBool("RecoilRagdoll", "DropGun", false);
+                RecoilRagdollController.ForceMultiplier = GetFloat("RecoilRagdoll", "ForceMultiplier", 1.0f);
+            }, "Load RecoilRagdoll");
+
+            SafeExecute(() =>
+            {
+                RagdollReloadController.Enabled = GetBool("RagdollReload", "Enabled", true);
+                RagdollReloadController.InsertDistance = GetFloat("RagdollReload", "InsertDistance", 0.15f);
+            }, "Load RagdollReload");
+
+            SafeExecute(() =>
+            {
+                AutoUpdaterController.AutoCheckEnabled = GetBool("AutoUpdater", "AutoCheck", false);
+                AutoUpdaterController.AutoInstallEnabled = GetBool("AutoUpdater", "AutoInstall", false);
+                AutoUpdaterController.BackupOldDlls = GetBool("AutoUpdater", "BackupOld", true);
+                AutoUpdaterController.NotifyOnUpdate = GetBool("AutoUpdater", "Notify", true);
+                AutoUpdaterController.CheckIntervalHours = GetFloat("AutoUpdater", "CheckIntervalHrs", 24f);
+            }, "Load AutoUpdater");
+
+            SafeExecute(() =>
+            {
                 LoadPresets();
             }, "Load Presets");
+
+            SafeExecute(() =>
+            {
+                BlockController.ItemBlockEnabled = GetBool("BlockItem", "Enabled", false);
+                BlockController.LocalBlockEnabled = GetBool("BlockLocal", "Enabled", false);
+                int bi = 0;
+                while (_sections.ContainsKey($"BlockItem.{bi}"))
+                {
+                    string s = $"BlockItem.{bi}";
+                    var barcode = GetValue(s, "Barcode", "");
+                    var name = GetValue(s, "Name", "");
+                    if (!string.IsNullOrEmpty(barcode))
+                        BlockController.AddBlockedItem(barcode, name);
+                    bi++;
+                }
+                int li = 0;
+                while (_sections.ContainsKey($"BlockLocal.{li}"))
+                {
+                    string s = $"BlockLocal.{li}";
+                    var barcode = GetValue(s, "Barcode", "");
+                    var name = GetValue(s, "Name", "");
+                    if (!string.IsNullOrEmpty(barcode))
+                        BlockController.AddLocalBlockedItem(barcode, name);
+                    li++;
+                }
+            }, "Load Blocks");
 
             Main.MelonLog.Msg("Settings loaded from config file");
         }
@@ -952,13 +1040,36 @@ namespace BonelabUtilityMod
 
             SafeExecute(() =>
             {
-                SetBool("GunModifier", "PurpleGuns", ChaosGunController.PurpleGuns);
+                SetBool("GunModifier", "CustomGunColorEnabled", ChaosGunController.CustomGunColorEnabled);
+                SetBool("GunModifier", "RainbowEnabled", ChaosGunController.RainbowEnabled);
+                SetBool("GunModifier", "EmissionEnabled", ChaosGunController.EmissionEnabled);
+                SetBool("GunModifier", "ReflectionEnabled", ChaosGunController.ReflectionEnabled);
+                SetBool("GunModifier", "TransparencyEnabled", ChaosGunController.TransparencyEnabled);
+                SetFloat("GunModifier", "TransparencyAmount", ChaosGunController.TransparencyAmount);
+                SetFloat("GunModifier", "ColorR", ChaosGunController.ColorR);
+                SetFloat("GunModifier", "ColorG", ChaosGunController.ColorG);
+                SetFloat("GunModifier", "ColorB", ChaosGunController.ColorB);
+                SetFloat("GunModifier", "EmissionIntensity", ChaosGunController.EmissionIntensity);
+                SetFloat("GunModifier", "RainbowSpeed", ChaosGunController.RainbowSpeed);
+                SetBool("GunModifier", "GradientEnabled", ChaosGunController.GradientEnabled);
+                SetFloat("GunModifier", "GradientSpeed", ChaosGunController.GradientSpeed);
+                SetFloat("GunModifier", "GradientSpread", ChaosGunController.GradientSpread);
+                SetFloat("GunModifier", "Color2R", ChaosGunController.Color2R);
+                SetFloat("GunModifier", "Color2G", ChaosGunController.Color2G);
+                SetFloat("GunModifier", "Color2B", ChaosGunController.Color2B);
                 SetBool("GunModifier", "InsaneDamage", ChaosGunController.InsaneDamage);
                 SetBool("GunModifier", "NoRecoil", ChaosGunController.NoRecoil);
                 SetBool("GunModifier", "InsaneFirerate", ChaosGunController.InsaneFirerate);
                 SetBool("GunModifier", "NoWeight", ChaosGunController.NoWeight);
                 SetBool("GunModifier", "GunsBounce", ChaosGunController.GunsBounce);
                 SetBool("GunModifier", "NoReload", ChaosGunController.NoReload);
+                SetBool("GunModifier", "ShaderLibraryEnabled", ChaosGunController.ShaderLibraryEnabled);
+                SetInt("GunModifier", "TextureMode", ChaosGunController.TextureMode);
+                SetFloat("GunModifier", "TexGradR2", ChaosGunController.TexGradR2);
+                SetFloat("GunModifier", "TexGradG2", ChaosGunController.TexGradG2);
+                SetFloat("GunModifier", "TexGradB2", ChaosGunController.TexGradB2);
+                SetFloat("GunModifier", "TexNoiseScale", ChaosGunController.TexNoiseScale);
+                SetFloat("GunModifier", "TexScrollSpeed", ChaosGunController.TexScrollSpeed);
             }, "Save Gun Modifier");
 
             SafeExecute(() =>
@@ -1151,6 +1262,7 @@ namespace BonelabUtilityMod
             SafeExecute(() =>
             {
                 SetBool("SpawnLimiter", "Enabled", SpawnLimiterController.Enabled);
+                SetBool("SpawnLimiter", "HostOnly", SpawnLimiterController.HostOnly);
                 SetFloat("SpawnLimiter", "SpawnDelay", SpawnLimiterController.SpawnDelay);
                 SetInt("SpawnLimiter", "MaxPerFrame", SpawnLimiterController.MaxPerFrame);
             }, "Save Spawn Limiter");
@@ -1383,7 +1495,7 @@ namespace BonelabUtilityMod
                 SetFloat("BunnyHop", "AirStrafeForce", BunnyHopController.AirStrafeForce);
                 SetFloat("BunnyHop", "JumpForce", BunnyHopController.JumpForce);
                 SetBool("BunnyHop", "AutoHop", BunnyHopController.AutoHop);
-                SetInt("BunnyHop", "StrafeMode", (int)BunnyHopController.StrafeMode);
+                SetBool("BunnyHop", "AutoJumpToggle", BunnyHopController.AutoJumpToggle);
                 SetFloat("BunnyHop", "StandableNormal", BunnyHopController.StandableNormal);
                 SetBool("BunnyHop", "TrimpEnabled", BunnyHopController.TrimpEnabled);
                 SetFloat("BunnyHop", "TrimpMultiplier", BunnyHopController.TrimpMultiplier);
@@ -1490,6 +1602,74 @@ namespace BonelabUtilityMod
                 SetFloat("Overlay", "GradEndG", OverlayMenu.GradientEndColor.g);
                 SetFloat("Overlay", "GradEndB", OverlayMenu.GradientEndColor.b);
             }, "Save Overlay");
+
+            SafeExecute(() =>
+            {
+                SetFloat("VROverlay", "Opacity", VROverlayMenu.VrOpacity);
+                SetFloat("VROverlay", "AccentR", VROverlayMenu.VrAccentR);
+                SetFloat("VROverlay", "AccentG", VROverlayMenu.VrAccentG);
+                SetFloat("VROverlay", "AccentB", VROverlayMenu.VrAccentB);
+                SetFloat("VROverlay", "BgR", VROverlayMenu.VrBgR);
+                SetFloat("VROverlay", "BgG", VROverlayMenu.VrBgG);
+                SetFloat("VROverlay", "BgB", VROverlayMenu.VrBgB);
+                SetBool("VROverlay", "Rainbow", VROverlayMenu.VrRainbow);
+                SetBool("VROverlay", "LeftHandDominant", VROverlayMenu.LeftHandDominant);
+            }, "Save VROverlay");
+
+            SafeExecute(() =>
+            {
+                SetBool("RecoilRagdoll", "Enabled", RecoilRagdollController.Enabled);
+                SetFloat("RecoilRagdoll", "Delay", RecoilRagdollController.Delay);
+                SetFloat("RecoilRagdoll", "Cooldown", RecoilRagdollController.Cooldown);
+                SetBool("RecoilRagdoll", "DropGun", RecoilRagdollController.DropGun);
+                SetFloat("RecoilRagdoll", "ForceMultiplier", RecoilRagdollController.ForceMultiplier);
+            }, "Save RecoilRagdoll");
+
+            SafeExecute(() =>
+            {
+                SetBool("RagdollReload", "Enabled", RagdollReloadController.Enabled);
+                SetFloat("RagdollReload", "InsertDistance", RagdollReloadController.InsertDistance);
+            }, "Save RagdollReload");
+
+            SafeExecute(() =>
+            {
+                SetBool("AutoUpdater", "AutoCheck", AutoUpdaterController.AutoCheckEnabled);
+                SetBool("AutoUpdater", "AutoInstall", AutoUpdaterController.AutoInstallEnabled);
+                SetBool("AutoUpdater", "BackupOld", AutoUpdaterController.BackupOldDlls);
+                SetBool("AutoUpdater", "Notify", AutoUpdaterController.NotifyOnUpdate);
+                SetFloat("AutoUpdater", "CheckIntervalHrs", AutoUpdaterController.CheckIntervalHours);
+            }, "Save AutoUpdater");
+
+            SafeExecute(() =>
+            {
+                SetBool("BlockItem", "Enabled", BlockController.ItemBlockEnabled);
+                SetBool("BlockLocal", "Enabled", BlockController.LocalBlockEnabled);
+                // Clear old BlockItem.N / BlockLocal.N sections
+                var toRemove = new List<string>();
+                foreach (var key in _sections.Keys)
+                {
+                    if (key.StartsWith("BlockItem.") || key.StartsWith("BlockLocal."))
+                        toRemove.Add(key);
+                }
+                foreach (var key in toRemove)
+                    _sections.Remove(key);
+                // Write item blocks
+                var items = BlockController.BlockedItems;
+                for (int i = 0; i < items.Count; i++)
+                {
+                    string s = $"BlockItem.{i}";
+                    SetValue(s, "Barcode", items[i].Barcode ?? "");
+                    SetValue(s, "Name", items[i].DisplayName ?? "");
+                }
+                // Write local blocks
+                var locals = BlockController.LocalBlockedItems;
+                for (int i = 0; i < locals.Count; i++)
+                {
+                    string s = $"BlockLocal.{i}";
+                    SetValue(s, "Barcode", locals[i].Barcode ?? "");
+                    SetValue(s, "Name", locals[i].DisplayName ?? "");
+                }
+            }, "Save Blocks");
 
             try
             {

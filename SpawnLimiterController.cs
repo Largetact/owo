@@ -9,8 +9,9 @@ namespace BonelabUtilityMod
     public static class SpawnLimiterController
     {
         private static bool _enabled = true;
-        private static float _spawnDelay = 0.75f;
-        private static int _maxPerFrame = 5;
+        private static bool _hostOnly = true;           // only enforce when host
+        private static float _spawnDelay = 0.3f;        // min seconds between spawns (lowered for snappier feel)
+        private static int _maxPerFrame = 3;             // max spawns per frame
 
         // Per-player rate tracking (works as both host and client)
         internal static readonly Dictionary<ulong, float> LastSpawnTimeByPlayer = new();
@@ -23,6 +24,23 @@ namespace BonelabUtilityMod
         {
             get => _enabled;
             set => _enabled = value;
+        }
+
+        public static bool HostOnly
+        {
+            get => _hostOnly;
+            set => _hostOnly = value;
+        }
+
+        /// <summary>
+        /// Returns true if we should actively enforce spawn limiting.
+        /// When HostOnly is true, only enforces if we are the host.
+        /// </summary>
+        private static bool ShouldEnforce()
+        {
+            if (!_enabled) return false;
+            if (!_hostOnly) return true;
+            try { return NetworkInfo.IsHost; } catch { return false; }
         }
 
         /// <summary>
@@ -49,7 +67,7 @@ namespace BonelabUtilityMod
         /// </summary>
         internal static bool AllowLocalSpawn()
         {
-            if (!_enabled) return true;
+            if (!ShouldEnforce()) return true;
 
             int frame = Time.frameCount;
             if (frame != LastFrameCount)
@@ -77,7 +95,7 @@ namespace BonelabUtilityMod
         /// </summary>
         internal static bool AllowPlayerSpawn(ulong platformId)
         {
-            if (!_enabled) return true;
+            if (!ShouldEnforce()) return true;
 
             float now = Time.realtimeSinceStartup;
             if (LastSpawnTimeByPlayer.TryGetValue(platformId, out float last) && now - last < _spawnDelay)
@@ -105,10 +123,7 @@ namespace BonelabUtilityMod
                     ulong platformId = received.PlatformID.Value;
 
                     if (!SpawnLimiterController.AllowPlayerSpawn(platformId))
-                    {
-                        MelonLogger.Msg($"[SpawnLimiter] Blocked rapid spawn from player {platformId}");
                         return false;
-                    }
                 }
                 catch { }
             }
@@ -117,7 +132,6 @@ namespace BonelabUtilityMod
         }
     }
 
-    // ─── Per-frame cap on incoming spawn responses (applies always) ───
     [HarmonyPatch(typeof(SpawnResponseMessage), "OnHandleMessage")]
     public static class SpawnLimiterFrameCapPatch
     {
@@ -126,10 +140,7 @@ namespace BonelabUtilityMod
             if (!SpawnLimiterController.Enabled) return true;
 
             if (!SpawnLimiterController.AllowLocalSpawn())
-            {
-                MelonLogger.Msg("[SpawnLimiter] Blocked rapid incoming spawn (per-frame cap)");
                 return false;
-            }
 
             return true;
         }

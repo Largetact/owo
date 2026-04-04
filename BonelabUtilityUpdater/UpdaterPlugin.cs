@@ -39,12 +39,8 @@ namespace BonelabUtilityUpdater
             LoggerInstance.Msg(System.ConsoleColor.Green, "Auto-updater is ONLINE");
 
             // ────────────────────────────────────────────────────────────
-            //  FIRST-TIME SETUP: Uncomment the line below, replace with
-            //  your actual GitHub username and repo name, run the game
-            //  ONCE, then copy the logged byte arrays into AutoUpdater.cs
-            //  and re-comment this line.
-            //
-            //  AutoUpdater.LogEncodedStrings("YourGitHubUsername", "YourRepoName", LoggerInstance);
+            //  Config is AES-256-CBC encrypted in AutoUpdater.cs.
+            //  To change owner/repo, re-encrypt with a new PowerShell script.
             // ────────────────────────────────────────────────────────────
 
             AutoUpdater.CheckAndUpdate(LoggerInstance);

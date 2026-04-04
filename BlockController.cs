@@ -303,6 +303,7 @@ namespace BonelabUtilityMod
             _blockedItems.Add(new BlockedItem { Barcode = barcode, DisplayName = displayName });
             Main.MelonLog.Msg($"Blocked item: {displayName} ({barcode})");
             NotificationHelper.Send(NotificationType.Success, $"Blocked: {displayName}");
+            SettingsManager.MarkDirty();
         }
 
         public static void RemoveBlockedItem(string barcode)
@@ -315,6 +316,7 @@ namespace BonelabUtilityMod
                     _blockedItems.RemoveAt(i);
                     Main.MelonLog.Msg($"Unblocked item: {name}");
                     NotificationHelper.Send(NotificationType.Success, $"Unblocked: {name}");
+                    SettingsManager.MarkDirty();
                     return;
                 }
             }
@@ -374,6 +376,7 @@ namespace BonelabUtilityMod
             _localBlockedItems.Add(new BlockedItem { Barcode = barcode, DisplayName = displayName });
             Main.MelonLog.Msg($"Local blocked item: {displayName} ({barcode})");
             NotificationHelper.Send(NotificationType.Success, $"Local blocked: {displayName}");
+            SettingsManager.MarkDirty();
         }
 
         public static void RemoveLocalBlockedItem(string barcode)
@@ -386,6 +389,7 @@ namespace BonelabUtilityMod
                     _localBlockedItems.RemoveAt(i);
                     Main.MelonLog.Msg($"Local unblocked item: {name}");
                     NotificationHelper.Send(NotificationType.Success, $"Local unblocked: {name}");
+                    SettingsManager.MarkDirty();
                     return;
                 }
             }

@@ -80,45 +80,54 @@ namespace BonelabUtilityMod
         private static bool _utilSpawnLimiter = false;
         private static bool _utilForceSpawner = false;
         private static bool _utilWindSfx = false;
-        private static bool _utilTeleport = false;
-        private static bool _utilWaypoints = false;
         private static bool _utilMapChange = false;
         private static bool _utilNotifications = false;
         private static bool _utilXyzScale = false;
-        private static bool _utilAvatarFx = false;
-        private static bool _utilHolsterHider = false;
         private static bool _utilSpawnMenu = false;
 
         // Player page collapsible sections
         private static bool _playerGodMode = false;
-        private static bool _playerDash = false;
-        private static bool _playerFlight = false;
         private static bool _playerRagdoll = false;
-        private static bool _playerSpinbot = false;
-        private static bool _playerBunnyHop = false;
         private static bool _playerAntiConstraint = false;
         private static bool _playerAntiKnockout = false;
         private static bool _playerUnbreakGrip = false;
         private static bool _playerAntiGravChange = false;
         private static bool _playerForceGrab = false;
-        private static bool _playerAutoRun = false;
         private static bool _playerDefaultWorld = false;
         private static bool _playerGhostMode = false;
         private static bool _playerAntiRagdoll = false;
         private static bool _playerAntiSlowmo = false;
         private static bool _playerAntiTeleport = false;
 
+        // Movement page collapsible sections
+        private static bool _movDash = false;
+        private static bool _movFlight = false;
+        private static bool _movBunnyHop = false;
+        private static bool _movAutoRun = false;
+        private static bool _movSpinbot = false;
+        private static bool _movTeleport = false;
+        private static bool _movWaypoints = false;
+
+        // Weapons page collapsible sections
+        private static bool _weapChaosGun = false;
+        private static bool _weapFullAuto = false;
+        private static bool _weapInfAmmo = false;
+        private static bool _weapDamageMult = false;
+
+        // Gun Visuals page collapsible sections
+        private static bool _gvCustomColor = false;
+        private static bool _gvShaderLib = false;
+        private static bool _gvTexEditor = false;
+
         // Combat page collapsible sections
         private static bool _combatExpPunch = false;
         private static bool _combatGroundSlam = false;
         private static bool _combatExpImpact = false;
         private static bool _combatRandExplode = false;
-        private static bool _combatFullAuto = false;
-        private static bool _combatInfAmmo = false;
-        private static bool _combatGunModifier = false;
         private static bool _combatSpawnOnPlayer = false;
         private static bool _combatWaypointProj = false;
-        private static bool _combatDamageMult = false;
+        private static bool _combatObjLauncher = false;
+        private static bool _combatRecoilRagdoll = false;
 
         // Utility page collapsible sections (new)
         private static bool _utilAINpc = false;
@@ -127,6 +136,7 @@ namespace BonelabUtilityMod
         private static bool _utilSpawnLogger = false;
         private static bool _utilLobbyBrowser = false;
         private static bool _utilSpoofing = false;
+        private static bool _utilAutoUpdater = false;
 
         // Spoofing mod reflection cache
         private static Type _spoofingModType;
@@ -138,14 +148,13 @@ namespace BonelabUtilityMod
         private static System.Reflection.PropertyInfo _spoofFakeNickname;
         private static System.Reflection.PropertyInfo _spoofFakeDescription;
 
-        // Launcher page collapsible sections
-        private static bool _launcherMain = false;
-
         // Cosmetics page collapsible sections
         private static bool _cosWeepingAngel = false;
         private static bool _cosAvatarCopier = false;
         private static int _acPlayerPage = 0;
         private static bool _cosBodyLogColor = false;
+        private static bool _cosAvatarFx = false;
+        private static bool _cosHolsterHider = false;
 
         // Network page collapsible sections
         private static bool _netAutoHost = false;
@@ -299,12 +308,14 @@ namespace BonelabUtilityMod
 
         private static readonly string[] PageNames = new string[]
         {
+            "Movement",
             "Player",
+            "Weapons",
+            "Gun Visuals",
             "Combat",
-            "Object Launcher",
             "Cosmetics",
+            "Server",
             "Utility",
-            "Network",
             "Avatar",
             "Keybinds",
             "Settings"
@@ -453,15 +464,17 @@ namespace BonelabUtilityMod
 
                 switch (_currentPage)
                 {
-                    case 0: DrawPlayerPage(y, w); break;
-                    case 1: DrawCombatPage(y, w); break;
-                    case 2: DrawLauncherPage(y, w); break;
-                    case 3: DrawCosmeticsPage(y, w); break;
-                    case 4: DrawUtilityPage(y, w); break;
-                    case 5: DrawNetworkPage(y, w); break;
-                    case 6: DrawAvatarPage(y, w); break;
-                    case 7: DrawKeybindsPage(y, w); break;
-                    case 8: DrawSettingsPage(y, w); break;
+                    case 0: DrawMovementPage(y, w); break;
+                    case 1: DrawPlayerPage(y, w); break;
+                    case 2: DrawWeaponsPage(y, w); break;
+                    case 3: DrawGunVisualsPage(y, w); break;
+                    case 4: DrawCombatPage(y, w); break;
+                    case 5: DrawCosmeticsPage(y, w); break;
+                    case 6: DrawServerPage(y, w); break;
+                    case 7: DrawUtilityPage(y, w); break;
+                    case 8: DrawAvatarPage(y, w); break;
+                    case 9: DrawKeybindsPage(y, w); break;
+                    case 10: DrawSettingsPage(y, w); break;
                 }
             }
             catch (Exception ex)
@@ -744,23 +757,6 @@ namespace BonelabUtilityMod
             return y + ROW + 2f;
         }
 
-        private static float EnumCycle(string label, ref AirStrafeMode mode, float y, float w)
-        {
-            var names = System.Enum.GetNames(typeof(AirStrafeMode));
-            float labelW = w * 0.45f;
-            float btnW = w * 0.5f;
-            GUI.Label(new Rect(PAD, y, labelW, ROW), label + ": " + mode);
-            Color ec = GUI.color;
-            GUI.color = _accentColor * new Color(1f, 1f, 1f, _menuOpacity);
-            if (GUI.Button(new Rect(PAD + labelW + 5f, y, btnW, ROW), mode.ToString(), _cachedButtonStyle))
-            {
-                mode = (AirStrafeMode)(((int)mode + 1) % names.Length);
-                SettingsManager.MarkDirty();
-            }
-            GUI.color = ec;
-            return y + ROW + 2f;
-        }
-
         // ═══════════════════════════════════════════
         //  Search functionality
         // ═══════════════════════════════════════════
@@ -783,7 +779,8 @@ namespace BonelabUtilityMod
             ("Random Explode", "random explode chance bomb surprise", 1, "RANDOM EXPLODE"),
             ("Full Auto", "full auto fire rate rapid shoot", 1, "FULL AUTO"),
             ("Infinite Ammo", "infinite ammo unlimited bullets magazine", 1, "INFINITE AMMO"),
-            ("Gun Modifier", "gun modifier glow rainbow damage recoil weight bounce reload", 1, "GUN MODIFIER"),
+            ("Gun Modifier", "gun modifier damage recoil weight bounce reload", 1, "GUN MODIFIER"),
+            ("Custom Gun Color", "custom gun color rainbow emission reflection transparency rgb gradient", 1, "CUSTOM GUN COLOR"),
             ("Spawn on Player", "spawn player drop item overhead homing", 1, "SPAWN ON PLAYER"),
             ("Waypoint Projectile", "waypoint projectile path homing guide", 1, "WAYPOINT PROJECTILE"),
             ("Object Launcher", "launcher shoot spawn object projectile homing", 2, "OBJECT LAUNCHER"),
@@ -852,21 +849,12 @@ namespace BonelabUtilityMod
         }
 
         // ═══════════════════════════════════════════
-        //  PAGE: Player (Dash, Flight, Ragdoll)
+        //  PAGE: Movement (Dash, Flight, Bunny Hop, etc.)
         // ═══════════════════════════════════════════
-        private static void DrawPlayerPage(float y, float w)
+        private static void DrawMovementPage(float y, float w)
         {
-            y = CollapsibleHeader("GOD MODE", ref _playerGodMode, y, w);
-            if (_playerGodMode)
-            {
-                bool gm = GodModeController.IsGodModeEnabled;
-                y = Toggle(ref gm, "God Mode", y, w);
-                GodModeController.IsGodModeEnabled = gm;
-            }
-
-            y = Gap(y, 10f);
-            y = CollapsibleHeader("DASH", ref _playerDash, y, w);
-            if (_playerDash)
+            y = CollapsibleHeader("DASH", ref _movDash, y, w);
+            if (_movDash)
             {
 
                 bool v1 = DashController.IsDashEnabled;
@@ -986,8 +974,8 @@ namespace BonelabUtilityMod
             }
 
             y = Gap(y, 10f);
-            y = CollapsibleHeader("FLIGHT", ref _playerFlight, y, w);
-            if (_playerFlight)
+            y = CollapsibleHeader("FLIGHT", ref _movFlight, y, w);
+            if (_movFlight)
             {
 
                 bool fe = FlightController.Enabled;
@@ -1107,6 +1095,176 @@ namespace BonelabUtilityMod
             }
 
             y = Gap(y, 10f);
+            y = CollapsibleHeader("BUNNY HOP", ref _movBunnyHop, y, w);
+            if (_movBunnyHop)
+            {
+                bool bhEn = BunnyHopController.Enabled;
+                y = Toggle(ref bhEn, "Enabled", y, w);
+                BunnyHopController.Enabled = bhEn;
+
+                float bhBoost = BunnyHopController.HopBoost;
+                y = Slider("Hop Boost", ref bhBoost, 0f, 20f, y, w, "F1");
+                BunnyHopController.HopBoost = bhBoost;
+
+                float bhMax = BunnyHopController.MaxSpeed;
+                y = Slider("Max Speed", ref bhMax, 5f, 200f, y, w, "F0");
+                BunnyHopController.MaxSpeed = bhMax;
+
+                float bhStrafe = BunnyHopController.AirStrafeForce;
+                y = Slider("Air Strafe Force", ref bhStrafe, 0f, 50f, y, w, "F1");
+                BunnyHopController.AirStrafeForce = bhStrafe;
+
+                float bhJump = BunnyHopController.JumpForce;
+                y = Slider("Jump Force", ref bhJump, 1f, 20f, y, w, "F1");
+                BunnyHopController.JumpForce = bhJump;
+
+                float bhStandable = BunnyHopController.StandableNormal;
+                y = Slider("Standable Normal", ref bhStandable, 0f, 1f, y, w, "F2");
+                BunnyHopController.StandableNormal = bhStandable;
+
+                bool bhAuto = BunnyHopController.AutoHop;
+                y = Toggle(ref bhAuto, "Auto Hop", y, w);
+                BunnyHopController.AutoHop = bhAuto;
+
+                bool bhAutoToggle = BunnyHopController.AutoJumpToggle;
+                y = Toggle(ref bhAutoToggle, "Auto Jump Toggle", y, w);
+                BunnyHopController.AutoJumpToggle = bhAutoToggle;
+
+                bool bhTrimp = BunnyHopController.TrimpEnabled;
+                y = Toggle(ref bhTrimp, "Trimping", y, w);
+                BunnyHopController.TrimpEnabled = bhTrimp;
+
+                float bhTrimpMul = BunnyHopController.TrimpMultiplier;
+                y = Slider("Trimp Multiplier", ref bhTrimpMul, 0f, 3f, y, w, "F2");
+                BunnyHopController.TrimpMultiplier = bhTrimpMul;
+
+                bool bhFx = BunnyHopController.JumpEffectEnabled;
+                y = Toggle(ref bhFx, "Jump Effect", y, w);
+                BunnyHopController.JumpEffectEnabled = bhFx;
+
+                y = Label("Effect Barcode: " + (string.IsNullOrEmpty(BunnyHopController.JumpEffectBarcode) ? "(none)" : BunnyHopController.JumpEffectBarcode), y, w);
+                y = DrawSpawnableSearch("Search Jump Effect", ref _bhopEffectSearchQuery, _bhopEffectSearchResults,
+                    (barcode, title) => { BunnyHopController.JumpEffectBarcode = barcode; }, y, w);
+            }
+
+            y = Gap(y, 10f);
+            y = CollapsibleHeader("AUTO RUN", ref _movAutoRun, y, w);
+            if (_movAutoRun)
+            {
+
+                bool ar = AutoRunController.Enabled;
+                y = Toggle(ref ar, "Enabled", y, w);
+                AutoRunController.Enabled = ar;
+            }
+
+            y = Gap(y, 10f);
+            y = CollapsibleHeader("SPINBOT", ref _movSpinbot, y, w);
+            if (_movSpinbot)
+            {
+                bool sb = SpinbotController.Enabled;
+                y = Toggle(ref sb, "Enabled", y, w);
+                SpinbotController.Enabled = sb;
+
+                float sbSpeed = SpinbotController.Speed;
+                y = Slider("Speed (°/s)", ref sbSpeed, 10f, 7200f, y, w, "F0");
+                SpinbotController.Speed = sbSpeed;
+
+                SpinDirection sbDir = SpinbotController.Direction;
+                y = EnumCycle("Direction", ref sbDir, y, w);
+                SpinbotController.Direction = sbDir;
+            }
+
+            y = Gap(y, 10f);
+            y = CollapsibleHeader("TELEPORT", ref _movTeleport, y, w);
+            if (_movTeleport)
+            {
+                y = Label("Saved: " + (TeleportController.HasSavedPosition ? TeleportController.SavedPositionText : "(none)"), y, w);
+
+                float tpBtnW = (w - 10f) / 3f;
+                if (GUI.Button(new Rect(PAD, y, tpBtnW, ROW), "Save Pos", _cachedButtonStyle))
+                    TeleportController.SaveCurrentPosition();
+                if (GUI.Button(new Rect(PAD + tpBtnW + 5f, y, tpBtnW, ROW), "Teleport", _cachedButtonStyle))
+                    TeleportController.TeleportToSavedPosition();
+                if (GUI.Button(new Rect(PAD + (tpBtnW + 5f) * 2f, y, tpBtnW, ROW), "Clear", _cachedButtonStyle))
+                    TeleportController.ClearSavedPosition();
+                y += ROW + 4f;
+
+                y = Section("Player Teleport", y, w);
+
+                y = Button("Refresh Players", y, 200f, 28f, () => TeleportController.RefreshPlayerList());
+
+                var tpPlayers = TeleportController.GetCachedPlayers();
+                if (tpPlayers.Count == 0)
+                {
+                    y = Label("No players found. Hit Refresh.", y, w);
+                }
+                else
+                {
+                    float tpNameW = w - 80f;
+                    for (int pi = 0; pi < tpPlayers.Count; pi++)
+                    {
+                        var p = tpPlayers[pi];
+                        GUI.Label(new Rect(PAD, y, tpNameW, ROW), p.DisplayName);
+                        Color tpPrev = GUI.color;
+                        GUI.color = _accentColor * new Color(1f, 1f, 1f, _menuOpacity);
+                        if (GUI.Button(new Rect(PAD + tpNameW + 5f, y, 70f, ROW), "TP", _cachedButtonStyle))
+                            TeleportController.TeleportToPlayerBySmallID(p.SmallID, p.DisplayName);
+                        GUI.color = tpPrev;
+                        y += ROW + 1f;
+                    }
+                }
+            }
+
+            y = Gap(y, 10f);
+            y = CollapsibleHeader("WAYPOINTS", ref _movWaypoints, y, w);
+            if (_movWaypoints)
+            {
+                y = Label("Waypoints: " + WaypointController.WaypointCount, y, w);
+
+                float tpHold = WaypointController.TeleportHoldTime;
+                y = Slider("Teleport Hold Time", ref tpHold, 0.5f, 5f, y, w);
+                WaypointController.TeleportHoldTime = tpHold;
+
+                y = Button("Create Waypoint", y, w * 0.48f, 28f, () => WaypointController.CreateWaypoint());
+                y = Button("Clear All Waypoints", y, w * 0.48f, 28f, () => WaypointController.ClearAllWaypoints());
+
+                var wps = WaypointController.Waypoints;
+                if (wps.Count > 0)
+                {
+                    y = Section("Saved Waypoints", y, w);
+                    for (int i = 0; i < wps.Count; i++)
+                    {
+                        int idx = i;
+                        var wp = wps[i];
+                        string wpLabel = $"{wp.Name} ({wp.Position.x:0.0}, {wp.Position.y:0.0}, {wp.Position.z:0.0})";
+                        GUI.Label(new Rect(PAD, y, w - 90f, ROW), wpLabel, _cachedLabelStyle);
+                        if (GUI.Button(new Rect(PAD + w - 80f, y, 70f, ROW - 2f), "Teleport", _cachedButtonStyle))
+                            WaypointController.TeleportToWaypoint(idx);
+                        y += ROW;
+                    }
+                }
+
+                y = Label("Default Spawn: " + (WaypointController.HasDefaultSpawn ? "Set" : "None"), y, w);
+                y = Button("Set Default Spawn", y, w * 0.31f, 28f, () => WaypointController.SetDefaultSpawn());
+                y = Button("Go To Spawn", y, w * 0.31f, 28f, () => WaypointController.TeleportToDefaultSpawn());
+                y = Button("Clear Spawn", y, w * 0.31f, 28f, () => WaypointController.ClearDefaultSpawn());
+            }
+        }
+
+        // ═══════════════════════════════════════════
+        //  PAGE: Player (God Mode, Ragdoll, etc.)
+        // ═══════════════════════════════════════════
+        private static void DrawPlayerPage(float y, float w)
+        {
+            y = CollapsibleHeader("GOD MODE", ref _playerGodMode, y, w);
+            if (_playerGodMode)
+            {
+                bool gm = GodModeController.IsGodModeEnabled;
+                y = Toggle(ref gm, "God Mode", y, w);
+                GodModeController.IsGodModeEnabled = gm;
+            }
+
+            y = Gap(y, 10f);
             y = CollapsibleHeader("RAGDOLL", ref _playerRagdoll, y, w);
             if (_playerRagdoll)
             {
@@ -1202,76 +1360,6 @@ namespace BonelabUtilityMod
             }
 
             y = Gap(y, 10f);
-            y = CollapsibleHeader("BUNNY HOP", ref _playerBunnyHop, y, w);
-            if (_playerBunnyHop)
-            {
-                bool bhEn = BunnyHopController.Enabled;
-                y = Toggle(ref bhEn, "Enabled", y, w);
-                BunnyHopController.Enabled = bhEn;
-
-                float bhBoost = BunnyHopController.HopBoost;
-                y = Slider("Hop Boost", ref bhBoost, 0f, 20f, y, w, "F1");
-                BunnyHopController.HopBoost = bhBoost;
-
-                float bhMax = BunnyHopController.MaxSpeed;
-                y = Slider("Max Speed", ref bhMax, 5f, 200f, y, w, "F0");
-                BunnyHopController.MaxSpeed = bhMax;
-
-                var bhMode = BunnyHopController.StrafeMode;
-                y = EnumCycle("Air Strafe Mode", ref bhMode, y, w);
-                BunnyHopController.StrafeMode = bhMode;
-
-                float bhStrafe = BunnyHopController.AirStrafeForce;
-                y = Slider("Air Strafe Force", ref bhStrafe, 0f, 50f, y, w, "F1");
-                BunnyHopController.AirStrafeForce = bhStrafe;
-
-                float bhJump = BunnyHopController.JumpForce;
-                y = Slider("Jump Force", ref bhJump, 1f, 20f, y, w, "F1");
-                BunnyHopController.JumpForce = bhJump;
-
-                float bhStandable = BunnyHopController.StandableNormal;
-                y = Slider("Standable Normal", ref bhStandable, 0f, 1f, y, w, "F2");
-                BunnyHopController.StandableNormal = bhStandable;
-
-                bool bhAuto = BunnyHopController.AutoHop;
-                y = Toggle(ref bhAuto, "Auto Hop", y, w);
-                BunnyHopController.AutoHop = bhAuto;
-
-                bool bhTrimp = BunnyHopController.TrimpEnabled;
-                y = Toggle(ref bhTrimp, "Trimping", y, w);
-                BunnyHopController.TrimpEnabled = bhTrimp;
-
-                float bhTrimpMul = BunnyHopController.TrimpMultiplier;
-                y = Slider("Trimp Multiplier", ref bhTrimpMul, 0f, 3f, y, w, "F2");
-                BunnyHopController.TrimpMultiplier = bhTrimpMul;
-
-                bool bhFx = BunnyHopController.JumpEffectEnabled;
-                y = Toggle(ref bhFx, "Jump Effect", y, w);
-                BunnyHopController.JumpEffectEnabled = bhFx;
-
-                y = Label("Effect Barcode: " + (string.IsNullOrEmpty(BunnyHopController.JumpEffectBarcode) ? "(none)" : BunnyHopController.JumpEffectBarcode), y, w);
-                y = DrawSpawnableSearch("Search Jump Effect", ref _bhopEffectSearchQuery, _bhopEffectSearchResults,
-                    (barcode, title) => { BunnyHopController.JumpEffectBarcode = barcode; }, y, w);
-            }
-
-            y = Gap(y, 10f);
-            y = CollapsibleHeader("SPINBOT", ref _playerSpinbot, y, w);
-            if (_playerSpinbot)
-            {
-                bool sb = SpinbotController.Enabled;
-                y = Toggle(ref sb, "Enabled", y, w);
-                SpinbotController.Enabled = sb;
-
-                float sbSpeed = SpinbotController.Speed;
-                y = Slider("Speed (°/s)", ref sbSpeed, 10f, 7200f, y, w, "F0");
-                SpinbotController.Speed = sbSpeed;
-
-                SpinDirection sbDir = SpinbotController.Direction;
-                y = EnumCycle("Direction", ref sbDir, y, w);
-                SpinbotController.Direction = sbDir;
-            }
-
-            y = Gap(y, 10f);
             y = CollapsibleHeader("ANTI-CONSTRAINT", ref _playerAntiConstraint, y, w);
             if (_playerAntiConstraint)
             {
@@ -1358,16 +1446,6 @@ namespace BonelabUtilityMod
             }
 
             y = Gap(y, 10f);
-            y = CollapsibleHeader("AUTO RUN", ref _playerAutoRun, y, w);
-            if (_playerAutoRun)
-            {
-
-                bool ar = AutoRunController.Enabled;
-                y = Toggle(ref ar, "Enabled", y, w);
-                AutoRunController.Enabled = ar;
-            }
-
-            y = Gap(y, 10f);
             y = CollapsibleHeader("DEFAULT WORLD", ref _playerDefaultWorld, y, w);
             if (_playerDefaultWorld)
             {
@@ -1415,6 +1493,258 @@ namespace BonelabUtilityMod
                 bool at2 = AntiTeleportController.Enabled;
                 y = Toggle(ref at2, "Enabled", y, w);
                 AntiTeleportController.Enabled = at2;
+            }
+
+            y = Gap(y, 10f);
+            y = CollapsibleHeader("XYZ SCALE", ref _utilXyzScale, y, w);
+            if (_utilXyzScale)
+            {
+                bool xyzEn = XYZScaleController.Enabled;
+                y = Toggle(ref xyzEn, "Enabled", y, w);
+                XYZScaleController.Enabled = xyzEn;
+
+                float sx = XYZScaleController.ScaleX;
+                y = Slider("Scale X", ref sx, 0.1f, 10f, y, w);
+                XYZScaleController.ScaleX = sx;
+
+                float sy = XYZScaleController.ScaleY;
+                y = Slider("Scale Y", ref sy, 0.1f, 10f, y, w);
+                XYZScaleController.ScaleY = sy;
+
+                float sz = XYZScaleController.ScaleZ;
+                y = Slider("Scale Z", ref sz, 0.1f, 10f, y, w);
+                XYZScaleController.ScaleZ = sz;
+
+                y = Button("Apply Scale", y, 200f, 28f, () => XYZScaleController.ApplyScale());
+                y = Button("Reset (1, 1, 1)", y, 200f, 28f, () =>
+                {
+                    XYZScaleController.ScaleX = 1f;
+                    XYZScaleController.ScaleY = 1f;
+                    XYZScaleController.ScaleZ = 1f;
+                    XYZScaleController.ApplyScale();
+                    SettingsManager.MarkDirty();
+                });
+            }
+        }
+
+        // ═══════════════════════════════════════════
+        //  PAGE: Weapons
+        // ═══════════════════════════════════════════
+        private static void DrawWeaponsPage(float y, float w)
+        {
+            y = CollapsibleHeader("GUN MODIFIER", ref _weapChaosGun, y, w);
+            if (_weapChaosGun)
+            {
+
+                bool cgDamage = ChaosGunController.InsaneDamage;
+                y = Toggle(ref cgDamage, "Insane Damage!", y, w);
+                ChaosGunController.InsaneDamage = cgDamage;
+
+                bool cgRecoil = ChaosGunController.NoRecoil;
+                y = Toggle(ref cgRecoil, "No Recoil!", y, w);
+                ChaosGunController.NoRecoil = cgRecoil;
+
+                bool cgFirerate = ChaosGunController.InsaneFirerate;
+                y = Toggle(ref cgFirerate, "Insane Firerate", y, w);
+                ChaosGunController.InsaneFirerate = cgFirerate;
+
+                bool cgWeight = ChaosGunController.NoWeight;
+                y = Toggle(ref cgWeight, "No Weight!", y, w);
+                ChaosGunController.NoWeight = cgWeight;
+
+                bool cgBounce = ChaosGunController.GunsBounce;
+                y = Toggle(ref cgBounce, "Guns Bounce!", y, w);
+                ChaosGunController.GunsBounce = cgBounce;
+
+                bool cgReload = ChaosGunController.NoReload;
+                y = Toggle(ref cgReload, "No Reload", y, w);
+                ChaosGunController.NoReload = cgReload;
+            }
+
+            y = Gap(y, 10f);
+            y = CollapsibleHeader("FULL AUTO", ref _weapFullAuto, y, w);
+            if (_weapFullAuto)
+            {
+
+                bool fae = FullAutoController.IsFullAutoEnabled;
+                y = Toggle(ref fae, "Enabled", y, w);
+                FullAutoController.IsFullAutoEnabled = fae;
+
+                float faMult = FullAutoController.FireRateMultiplier;
+                y = Slider("Fire Rate Multiplier", ref faMult, 1f, 1000f, y, w, "F1");
+                FullAutoController.FireRateMultiplier = faMult;
+            }
+
+            y = Gap(y, 10f);
+            y = CollapsibleHeader("INFINITE AMMO", ref _weapInfAmmo, y, w);
+            if (_weapInfAmmo)
+            {
+
+                bool infAmmo = InfiniteAmmoController.IsEnabled;
+                y = Toggle(ref infAmmo, "Infinite Ammo", y, w);
+                InfiniteAmmoController.IsEnabled = infAmmo;
+            }
+
+            y = Gap(y, 10f);
+            y = CollapsibleHeader("DAMAGE MULTIPLIER", ref _weapDamageMult, y, w);
+            if (_weapDamageMult)
+            {
+                float dmGun = DamageMultiplierController.GunMultiplier;
+                y = Slider("Gun Multiplier", ref dmGun, 0.1f, 100f, y, w);
+                DamageMultiplierController.GunMultiplier = dmGun;
+
+                float dmMelee = DamageMultiplierController.MeleeMultiplier;
+                y = Slider("Melee Multiplier", ref dmMelee, 0.1f, 100f, y, w);
+                DamageMultiplierController.MeleeMultiplier = dmMelee;
+
+                y = Button("Apply Now", y, 200f, 28f, () => DamageMultiplierController.ApplyMultipliersNow());
+                y = Button("Reset to 1x", y, 200f, 28f, () => { DamageMultiplierController.GunMultiplier = 1f; DamageMultiplierController.MeleeMultiplier = 1f; });
+            }
+        }
+
+        // ═══════════════════════════════════════════
+        //  PAGE: Gun Visuals
+        // ═══════════════════════════════════════════
+        private static void DrawGunVisualsPage(float y, float w)
+        {
+            y = CollapsibleHeader("CUSTOM GUN COLOR", ref _gvCustomColor, y, w);
+            if (_gvCustomColor)
+            {
+                bool ccEnabled = ChaosGunController.CustomGunColorEnabled;
+                y = Toggle(ref ccEnabled, "Enabled", y, w);
+                ChaosGunController.CustomGunColorEnabled = ccEnabled;
+
+                bool ccRainbow = ChaosGunController.RainbowEnabled;
+                y = Toggle(ref ccRainbow, "Rainbow", y, w);
+                ChaosGunController.RainbowEnabled = ccRainbow;
+
+                bool ccEmission = ChaosGunController.EmissionEnabled;
+                y = Toggle(ref ccEmission, "Emission", y, w);
+                ChaosGunController.EmissionEnabled = ccEmission;
+
+                bool ccReflection = ChaosGunController.ReflectionEnabled;
+                y = Toggle(ref ccReflection, "Reflection", y, w);
+                ChaosGunController.ReflectionEnabled = ccReflection;
+
+                bool ccTransparency = ChaosGunController.TransparencyEnabled;
+                y = Toggle(ref ccTransparency, "Transparency", y, w);
+                ChaosGunController.TransparencyEnabled = ccTransparency;
+
+                float ccTransAmount = ChaosGunController.TransparencyAmount;
+                y = Slider("Transparency Amount", ref ccTransAmount, 0f, 1f, y, w, "F2");
+                ChaosGunController.TransparencyAmount = ccTransAmount;
+
+                float ccEmIntensity = ChaosGunController.EmissionIntensity;
+                y = Slider("Emission Intensity", ref ccEmIntensity, 0f, 20f, y, w, "F1");
+                ChaosGunController.EmissionIntensity = ccEmIntensity;
+
+                float ccRainbowSpeed = ChaosGunController.RainbowSpeed;
+                y = Slider("Rainbow Speed", ref ccRainbowSpeed, 0.01f, 2f, y, w, "F2");
+                ChaosGunController.RainbowSpeed = ccRainbowSpeed;
+
+                float ccR = ChaosGunController.ColorR;
+                y = Slider("Color R", ref ccR, 0f, 1f, y, w, "F2");
+                ChaosGunController.ColorR = ccR;
+
+                float ccG = ChaosGunController.ColorG;
+                y = Slider("Color G", ref ccG, 0f, 1f, y, w, "F2");
+                ChaosGunController.ColorG = ccG;
+
+                float ccB = ChaosGunController.ColorB;
+                y = Slider("Color B", ref ccB, 0f, 1f, y, w, "F2");
+                ChaosGunController.ColorB = ccB;
+
+                bool ccGradient = ChaosGunController.GradientEnabled;
+                y = Toggle(ref ccGradient, "Gradient", y, w);
+                ChaosGunController.GradientEnabled = ccGradient;
+
+                float ccGradSpeed = ChaosGunController.GradientSpeed;
+                y = Slider("Gradient Speed", ref ccGradSpeed, 0f, 5f, y, w, "F1");
+                ChaosGunController.GradientSpeed = ccGradSpeed;
+
+                float ccGradSpread = ChaosGunController.GradientSpread;
+                y = Slider("Gradient Spread", ref ccGradSpread, 0.1f, 5f, y, w, "F1");
+                ChaosGunController.GradientSpread = ccGradSpread;
+
+                float cc2R = ChaosGunController.Color2R;
+                y = Slider("Color 2 R", ref cc2R, 0f, 1f, y, w, "F2");
+                ChaosGunController.Color2R = cc2R;
+
+                float cc2G = ChaosGunController.Color2G;
+                y = Slider("Color 2 G", ref cc2G, 0f, 1f, y, w, "F2");
+                ChaosGunController.Color2G = cc2G;
+
+                float cc2B = ChaosGunController.Color2B;
+                y = Slider("Color 2 B", ref cc2B, 0f, 1f, y, w, "F2");
+                ChaosGunController.Color2B = cc2B;
+            }
+
+            y = Gap(y, 10f);
+            y = CollapsibleHeader("SHADER LIBRARY", ref _gvShaderLib, y, w);
+            if (_gvShaderLib)
+            {
+                bool shEn = ChaosGunController.ShaderLibraryEnabled;
+                y = Toggle(ref shEn, "Enabled", y, w);
+                ChaosGunController.ShaderLibraryEnabled = shEn;
+
+                y = Button("Refresh Shaders (" + ChaosGunController.ShaderCount + ")", y, 250f, 28f, () => ChaosGunController.RefreshShaderList());
+
+                if (ChaosGunController.ShaderCount > 0)
+                {
+                    y = Label("Shader: " + ChaosGunController.SelectedShaderName, y, w);
+                    y = Label("  (" + (ChaosGunController.SelectedShaderIndex + 1) + " / " + ChaosGunController.ShaderCount + ")", y, w);
+
+                    float navW = (w - 10f) / 2f;
+                    if (GUI.Button(new Rect(PAD, y, navW, ROW), "<< Prev", _cachedButtonStyle))
+                        ChaosGunController.PrevShader();
+                    if (GUI.Button(new Rect(PAD + navW + 10f, y, navW, ROW), "Next >>", _cachedButtonStyle))
+                        ChaosGunController.NextShader();
+                    y += ROW + 4f;
+
+                    y = Button("Apply Shader", y, 200f, 28f, () => ChaosGunController.ApplyShaderToGun());
+                    y = Button("Revert Shaders", y, 200f, 28f, () => ChaosGunController.RevertShaders());
+                }
+            }
+
+            y = Gap(y, 10f);
+            y = CollapsibleHeader("TEXTURE EDITOR", ref _gvTexEditor, y, w);
+            if (_gvTexEditor)
+            {
+                int texMode = ChaosGunController.TextureMode;
+                string[] texModes = ChaosGunController.TextureModeNames;
+                y = Label("Mode: " + texModes[texMode], y, w);
+                float modeF = texMode;
+                y = Slider("Mode", ref modeF, 0f, texModes.Length - 1, y, w, "F0");
+                ChaosGunController.TextureMode = (int)modeF;
+
+                if (ChaosGunController.TextureMode >= 2)
+                {
+                    float tr2 = ChaosGunController.TexGradR2;
+                    y = Slider("Tex Color2 R", ref tr2, 0f, 1f, y, w, "F2");
+                    ChaosGunController.TexGradR2 = tr2;
+
+                    float tg2 = ChaosGunController.TexGradG2;
+                    y = Slider("Tex Color2 G", ref tg2, 0f, 1f, y, w, "F2");
+                    ChaosGunController.TexGradG2 = tg2;
+
+                    float tb2 = ChaosGunController.TexGradB2;
+                    y = Slider("Tex Color2 B", ref tb2, 0f, 1f, y, w, "F2");
+                    ChaosGunController.TexGradB2 = tb2;
+                }
+
+                if (ChaosGunController.TextureMode == 3)
+                {
+                    float ns = ChaosGunController.TexNoiseScale;
+                    y = Slider("Noise Scale", ref ns, 1f, 50f, y, w, "F0");
+                    ChaosGunController.TexNoiseScale = ns;
+                }
+
+                float scr = ChaosGunController.TexScrollSpeed;
+                y = Slider("Scroll Speed", ref scr, 0f, 5f, y, w, "F1");
+                ChaosGunController.TexScrollSpeed = scr;
+
+                y = Button("Apply Texture", y, 200f, 28f, () => ChaosGunController.ApplyTextureToGun());
+                y = Button("Restore Textures", y, 200f, 28f, () => ChaosGunController.RestoreTextures());
             }
         }
 
@@ -1832,64 +2162,6 @@ namespace BonelabUtilityMod
             }
 
             y = Gap(y, 10f);
-            y = CollapsibleHeader("FULL AUTO", ref _combatFullAuto, y, w);
-            if (_combatFullAuto)
-            {
-
-                bool fae = FullAutoController.IsFullAutoEnabled;
-                y = Toggle(ref fae, "Enabled", y, w);
-                FullAutoController.IsFullAutoEnabled = fae;
-
-                float faMult = FullAutoController.FireRateMultiplier;
-                y = Slider("Fire Rate Multiplier", ref faMult, 1f, 1000f, y, w, "F1");
-                FullAutoController.FireRateMultiplier = faMult;
-            }
-
-            y = Gap(y, 10f);
-            y = CollapsibleHeader("INFINITE AMMO", ref _combatInfAmmo, y, w);
-            if (_combatInfAmmo)
-            {
-
-                bool infAmmo = InfiniteAmmoController.IsEnabled;
-                y = Toggle(ref infAmmo, "Infinite Ammo", y, w);
-                InfiniteAmmoController.IsEnabled = infAmmo;
-            }
-
-            y = Gap(y, 10f);
-            y = CollapsibleHeader("GUN MODIFIER", ref _combatGunModifier, y, w);
-            if (_combatGunModifier)
-            {
-
-                bool cgPurple = ChaosGunController.PurpleGuns;
-                y = Toggle(ref cgPurple, "Glow Gun (Rainbow)", y, w);
-                ChaosGunController.PurpleGuns = cgPurple;
-
-                bool cgDamage = ChaosGunController.InsaneDamage;
-                y = Toggle(ref cgDamage, "Insane Damage!", y, w);
-                ChaosGunController.InsaneDamage = cgDamage;
-
-                bool cgRecoil = ChaosGunController.NoRecoil;
-                y = Toggle(ref cgRecoil, "No Recoil!", y, w);
-                ChaosGunController.NoRecoil = cgRecoil;
-
-                bool cgFirerate = ChaosGunController.InsaneFirerate;
-                y = Toggle(ref cgFirerate, "Insane Firerate", y, w);
-                ChaosGunController.InsaneFirerate = cgFirerate;
-
-                bool cgWeight = ChaosGunController.NoWeight;
-                y = Toggle(ref cgWeight, "No Weight!", y, w);
-                ChaosGunController.NoWeight = cgWeight;
-
-                bool cgBounce = ChaosGunController.GunsBounce;
-                y = Toggle(ref cgBounce, "Guns Bounce!", y, w);
-                ChaosGunController.GunsBounce = cgBounce;
-
-                bool cgReload = ChaosGunController.NoReload;
-                y = Toggle(ref cgReload, "No Reload", y, w);
-                ChaosGunController.NoReload = cgReload;
-            }
-
-            y = Gap(y, 10f);
             y = CollapsibleHeader("SPAWN ON PLAYER", ref _combatSpawnOnPlayer, y, w);
             if (_combatSpawnOnPlayer)
             {
@@ -2094,29 +2366,8 @@ namespace BonelabUtilityMod
             }
 
             y = Gap(y, 10f);
-            y = CollapsibleHeader("DAMAGE MULTIPLIER", ref _combatDamageMult, y, w);
-            if (_combatDamageMult)
-            {
-                float dmGun = DamageMultiplierController.GunMultiplier;
-                y = Slider("Gun Multiplier", ref dmGun, 0.1f, 100f, y, w);
-                DamageMultiplierController.GunMultiplier = dmGun;
-
-                float dmMelee = DamageMultiplierController.MeleeMultiplier;
-                y = Slider("Melee Multiplier", ref dmMelee, 0.1f, 100f, y, w);
-                DamageMultiplierController.MeleeMultiplier = dmMelee;
-
-                y = Button("Apply Now", y, 200f, 28f, () => DamageMultiplierController.ApplyMultipliersNow());
-                y = Button("Reset to 1x", y, 200f, 28f, () => { DamageMultiplierController.GunMultiplier = 1f; DamageMultiplierController.MeleeMultiplier = 1f; });
-            }
-        }
-
-        // ═══════════════════════════════════════════
-        //  PAGE: Object Launcher
-        // ═══════════════════════════════════════════
-        private static void DrawLauncherPage(float y, float w)
-        {
-            y = CollapsibleHeader("OBJECT LAUNCHER", ref _launcherMain, y, w);
-            if (_launcherMain)
+            y = CollapsibleHeader("OBJECT LAUNCHER", ref _combatObjLauncher, y, w);
+            if (_combatObjLauncher)
             {
 
                 bool oe = ObjectLauncherController.IsLauncherEnabled;
@@ -2199,7 +2450,6 @@ namespace BonelabUtilityMod
                 y = Slider("Force Delay", ref oForceDelay, 0f, 0.5f, y, w, "F3");
                 ObjectLauncherController.ForceDelay = oForceDelay;
 
-                // Homing
                 y = Gap(y);
                 y = Section("Homing", y, w);
 
@@ -2247,7 +2497,6 @@ namespace BonelabUtilityMod
                 y = Slider("Homing Accel Rate", ref ohAr, 0.1f, 10f, y, w);
                 ObjectLauncherController.HomingAccelRate = ohAr;
 
-                // Cleanup
                 y = Gap(y);
                 y = Section("Cleanup", y, w);
 
@@ -2273,11 +2522,34 @@ namespace BonelabUtilityMod
                 y = Slider("Despawn Delay (s)", ref odd, 1f, 120f, y, w);
                 ObjectLauncherController.AutoDespawnDelay = odd;
 
-                // Spawnable search for launcher
                 y = Gap(y, 10f);
                 y = Label("Current: " + ObjectLauncherController.CurrentItemName, y, w);
                 y = DrawSpawnableSearch("Search Spawnable", ref _launcherSearchQuery, _launcherSearchResults,
                     (barcode, title) => { ObjectLauncherController.CurrentBarcodeID = barcode; ObjectLauncherController.CurrentItemName = title; }, y, w);
+            }
+
+            y = CollapsibleHeader("RECOIL RAGDOLL", ref _combatRecoilRagdoll, y, w);
+            if (_combatRecoilRagdoll)
+            {
+                bool rrEnabled = RecoilRagdollController.Enabled;
+                y = Toggle(ref rrEnabled, "Enabled", y, w);
+                RecoilRagdollController.Enabled = rrEnabled;
+
+                float rrDelay = RecoilRagdollController.Delay;
+                y = Slider("Delay (s)", ref rrDelay, 0f, 2f, y, w, "F2");
+                RecoilRagdollController.Delay = rrDelay;
+
+                float rrCooldown = RecoilRagdollController.Cooldown;
+                y = Slider("Cooldown (s)", ref rrCooldown, 0.1f, 10f, y, w, "F1");
+                RecoilRagdollController.Cooldown = rrCooldown;
+
+                float rrForce = RecoilRagdollController.ForceMultiplier;
+                y = Slider("Knockback Force", ref rrForce, 0f, 10f, y, w, "F1");
+                RecoilRagdollController.ForceMultiplier = rrForce;
+
+                bool rrDrop = RecoilRagdollController.DropGun;
+                y = Toggle(ref rrDrop, "Drop Gun", y, w);
+                RecoilRagdollController.DropGun = rrDrop;
             }
         }
 
@@ -2419,6 +2691,34 @@ namespace BonelabUtilityMod
 
                 y = Button("Apply All Colors", y, 200f, 28f, () => BodyLogColorController.ApplyAll());
             }
+
+            y = Gap(y, 10f);
+            y = CollapsibleHeader("AVATAR SWITCH FX", ref _cosAvatarFx, y, w);
+            if (_cosAvatarFx)
+            {
+                bool avfx = DisableAvatarFXController.Enabled;
+                y = Toggle(ref avfx, "Disable Switch Effects", y, w);
+                DisableAvatarFXController.Enabled = avfx;
+            }
+
+            y = Gap(y, 10f);
+            y = CollapsibleHeader("HOLSTER HIDER", ref _cosHolsterHider, y, w);
+            if (_cosHolsterHider)
+            {
+                bool hh = HolsterHiderController.HideHolsters;
+                y = Toggle(ref hh, "Hide Holsters", y, w);
+                if (hh != HolsterHiderController.HideHolsters) HolsterHiderController.HideHolsters = hh;
+
+                bool ha = HolsterHiderController.HideAmmoPouch;
+                y = Toggle(ref ha, "Hide Ammo Pouches", y, w);
+                if (ha != HolsterHiderController.HideAmmoPouch) HolsterHiderController.HideAmmoPouch = ha;
+
+                bool hbl = HolsterHiderController.HideBodyLog;
+                y = Toggle(ref hbl, "Hide Body Log", y, w);
+                if (hbl != HolsterHiderController.HideBodyLog) HolsterHiderController.HideBodyLog = hbl;
+
+                y = Button("Apply Now", y, 200f, 28f, () => HolsterHiderController.Apply());
+            }
         }
 
         // ═══════════════════════════════════════════
@@ -2463,6 +2763,10 @@ namespace BonelabUtilityMod
                 bool sle = SpawnLimiterController.Enabled;
                 y = Toggle(ref sle, "Enabled", y, w);
                 SpawnLimiterController.Enabled = sle;
+
+                bool slh = SpawnLimiterController.HostOnly;
+                y = Toggle(ref slh, "Host Only", y, w);
+                SpawnLimiterController.HostOnly = slh;
 
                 float sld = SpawnLimiterController.SpawnDelay;
                 y = Slider("Spawn Delay (s)", ref sld, 0.05f, 5f, y, w);
@@ -2531,83 +2835,6 @@ namespace BonelabUtilityMod
             }
 
             y = Gap(y, 10f);
-            y = CollapsibleHeader("TELEPORT", ref _utilTeleport, y, w);
-            if (_utilTeleport)
-            {
-                y = Label("Saved: " + (TeleportController.HasSavedPosition ? TeleportController.SavedPositionText : "(none)"), y, w);
-
-                float tpBtnW = (w - 10f) / 3f;
-                if (GUI.Button(new Rect(PAD, y, tpBtnW, ROW), "Save Pos", _cachedButtonStyle))
-                    TeleportController.SaveCurrentPosition();
-                if (GUI.Button(new Rect(PAD + tpBtnW + 5f, y, tpBtnW, ROW), "Teleport", _cachedButtonStyle))
-                    TeleportController.TeleportToSavedPosition();
-                if (GUI.Button(new Rect(PAD + (tpBtnW + 5f) * 2f, y, tpBtnW, ROW), "Clear", _cachedButtonStyle))
-                    TeleportController.ClearSavedPosition();
-                y += ROW + 4f;
-
-                y = Section("Player Teleport", y, w);
-
-                y = Button("Refresh Players", y, 200f, 28f, () => TeleportController.RefreshPlayerList());
-
-                var tpPlayers = TeleportController.GetCachedPlayers();
-                if (tpPlayers.Count == 0)
-                {
-                    y = Label("No players found. Hit Refresh.", y, w);
-                }
-                else
-                {
-                    float tpNameW = w - 80f;
-                    for (int pi = 0; pi < tpPlayers.Count; pi++)
-                    {
-                        var p = tpPlayers[pi];
-                        GUI.Label(new Rect(PAD, y, tpNameW, ROW), p.DisplayName);
-                        Color tpPrev = GUI.color;
-                        GUI.color = _accentColor * new Color(1f, 1f, 1f, _menuOpacity);
-                        if (GUI.Button(new Rect(PAD + tpNameW + 5f, y, 70f, ROW), "TP", _cachedButtonStyle))
-                            TeleportController.TeleportToPlayerBySmallID(p.SmallID, p.DisplayName);
-                        GUI.color = tpPrev;
-                        y += ROW + 1f;
-                    }
-                }
-            }
-
-            y = Gap(y, 10f);
-            y = CollapsibleHeader("WAYPOINTS", ref _utilWaypoints, y, w);
-            if (_utilWaypoints)
-            {
-                y = Label("Waypoints: " + WaypointController.WaypointCount, y, w);
-
-                float tpHold = WaypointController.TeleportHoldTime;
-                y = Slider("Teleport Hold Time", ref tpHold, 0.5f, 5f, y, w);
-                WaypointController.TeleportHoldTime = tpHold;
-
-                y = Button("Create Waypoint", y, w * 0.48f, 28f, () => WaypointController.CreateWaypoint());
-                y = Button("Clear All Waypoints", y, w * 0.48f, 28f, () => WaypointController.ClearAllWaypoints());
-
-                // Waypoint list with teleport buttons
-                var wps = WaypointController.Waypoints;
-                if (wps.Count > 0)
-                {
-                    y = Section("Saved Waypoints", y, w);
-                    for (int i = 0; i < wps.Count; i++)
-                    {
-                        int idx = i;
-                        var wp = wps[i];
-                        string wpLabel = $"{wp.Name} ({wp.Position.x:0.0}, {wp.Position.y:0.0}, {wp.Position.z:0.0})";
-                        GUI.Label(new Rect(PAD, y, w - 90f, ROW), wpLabel, _cachedLabelStyle);
-                        if (GUI.Button(new Rect(PAD + w - 80f, y, 70f, ROW - 2f), "Teleport", _cachedButtonStyle))
-                            WaypointController.TeleportToWaypoint(idx);
-                        y += ROW;
-                    }
-                }
-
-                y = Label("Default Spawn: " + (WaypointController.HasDefaultSpawn ? "Set" : "None"), y, w);
-                y = Button("Set Default Spawn", y, w * 0.31f, 28f, () => WaypointController.SetDefaultSpawn());
-                y = Button("Go To Spawn", y, w * 0.31f, 28f, () => WaypointController.TeleportToDefaultSpawn());
-                y = Button("Clear Spawn", y, w * 0.31f, 28f, () => WaypointController.ClearDefaultSpawn());
-            }
-
-            y = Gap(y, 10f);
             y = CollapsibleHeader("MAP CHANGE", ref _utilMapChange, y, w);
             if (_utilMapChange)
             {
@@ -2626,65 +2853,6 @@ namespace BonelabUtilityMod
 
             y = Gap(y, 10f);
             y = Button("Fix Wobbly Avatar", y, 200f, 28f, () => BlockController.FixWobblyAvatar());
-
-            y = Gap(y, 10f);
-            y = CollapsibleHeader("XYZ SCALE", ref _utilXyzScale, y, w);
-            if (_utilXyzScale)
-            {
-                bool xyzEn = XYZScaleController.Enabled;
-                y = Toggle(ref xyzEn, "Enabled", y, w);
-                XYZScaleController.Enabled = xyzEn;
-
-                float sx = XYZScaleController.ScaleX;
-                y = Slider("Scale X", ref sx, 0.1f, 10f, y, w);
-                XYZScaleController.ScaleX = sx;
-
-                float sy = XYZScaleController.ScaleY;
-                y = Slider("Scale Y", ref sy, 0.1f, 10f, y, w);
-                XYZScaleController.ScaleY = sy;
-
-                float sz = XYZScaleController.ScaleZ;
-                y = Slider("Scale Z", ref sz, 0.1f, 10f, y, w);
-                XYZScaleController.ScaleZ = sz;
-
-                y = Button("Apply Scale", y, 200f, 28f, () => XYZScaleController.ApplyScale());
-                y = Button("Reset (1, 1, 1)", y, 200f, 28f, () =>
-                {
-                    XYZScaleController.ScaleX = 1f;
-                    XYZScaleController.ScaleY = 1f;
-                    XYZScaleController.ScaleZ = 1f;
-                    XYZScaleController.ApplyScale();
-                    SettingsManager.MarkDirty();
-                });
-            }
-
-            y = Gap(y, 10f);
-            y = CollapsibleHeader("AVATAR SWITCH FX", ref _utilAvatarFx, y, w);
-            if (_utilAvatarFx)
-            {
-                bool avfx = DisableAvatarFXController.Enabled;
-                y = Toggle(ref avfx, "Disable Switch Effects", y, w);
-                DisableAvatarFXController.Enabled = avfx;
-            }
-
-            y = Gap(y, 10f);
-            y = CollapsibleHeader("HOLSTER HIDER", ref _utilHolsterHider, y, w);
-            if (_utilHolsterHider)
-            {
-                bool hh = HolsterHiderController.HideHolsters;
-                y = Toggle(ref hh, "Hide Holsters", y, w);
-                if (hh != HolsterHiderController.HideHolsters) HolsterHiderController.HideHolsters = hh;
-
-                bool ha = HolsterHiderController.HideAmmoPouch;
-                y = Toggle(ref ha, "Hide Ammo Pouches", y, w);
-                if (ha != HolsterHiderController.HideAmmoPouch) HolsterHiderController.HideAmmoPouch = ha;
-
-                bool hbl = HolsterHiderController.HideBodyLog;
-                y = Toggle(ref hbl, "Hide Body Log", y, w);
-                if (hbl != HolsterHiderController.HideBodyLog) HolsterHiderController.HideBodyLog = hbl;
-
-                y = Button("Apply Now", y, 200f, 28f, () => HolsterHiderController.Apply());
-            }
 
             y = Gap(y, 10f);
             y = CollapsibleHeader("SPAWN MENU", ref _utilSpawnMenu, y, w);
@@ -2897,12 +3065,50 @@ namespace BonelabUtilityMod
                     catch { }
                 }
             }
+
+            y = Gap(y, 10f);
+            y = CollapsibleHeader("AUTO-UPDATER", ref _utilAutoUpdater, y, w);
+            if (_utilAutoUpdater)
+            {
+                bool auCheck = AutoUpdaterController.AutoCheckEnabled;
+                y = Toggle(ref auCheck, "Auto Check", y, w);
+                AutoUpdaterController.AutoCheckEnabled = auCheck;
+
+                bool auInstall = AutoUpdaterController.AutoInstallEnabled;
+                y = Toggle(ref auInstall, "Auto Install", y, w);
+                AutoUpdaterController.AutoInstallEnabled = auInstall;
+
+                bool auBackup = AutoUpdaterController.BackupOldDlls;
+                y = Toggle(ref auBackup, "Backup Old DLLs", y, w);
+                AutoUpdaterController.BackupOldDlls = auBackup;
+
+                bool auNotify = AutoUpdaterController.NotifyOnUpdate;
+                y = Toggle(ref auNotify, "Notify on Update", y, w);
+                AutoUpdaterController.NotifyOnUpdate = auNotify;
+
+                float auInterval = AutoUpdaterController.CheckIntervalHours;
+                y = Slider("Check Interval (hrs)", ref auInterval, 0.5f, 168f, y, w, "F1");
+                AutoUpdaterController.CheckIntervalHours = auInterval;
+
+                y = Label("Status: " + AutoUpdaterController.StatusMessage, y, w);
+                y = Label("DLLs: " + AutoUpdaterController.InstalledDllCount, y, w);
+                y = Button("Scan DLLs", y, w, 28f, () => AutoUpdaterController.RefreshDllList());
+                y = Button("Open Mods Folder", y, w, 28f, () => AutoUpdaterController.OpenModsFolder());
+                y = Button("Open Backups Folder", y, w, 28f, () => AutoUpdaterController.OpenBackupsFolder());
+
+                var dlls = AutoUpdaterController.GetInstalledDlls();
+                for (int i = 0; i < dlls.Count && i < 20; i++)
+                {
+                    var dll = dlls[i];
+                    y = Label($"  {dll.FileName} ({dll.SizeText})", y, w);
+                }
+            }
         }
 
         // ═══════════════════════════════════════════
-        //  PAGE: Network
+        //  PAGE: Server
         // ═══════════════════════════════════════════
-        private static void DrawNetworkPage(float y, float w)
+        private static void DrawServerPage(float y, float w)
         {
             y = CollapsibleHeader("AUTO HOST", ref _netAutoHost, y, w);
             if (_netAutoHost)

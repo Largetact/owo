@@ -11,6 +11,7 @@
   <Var name="RenameProperties" value="true" />
   <Var name="RenameEvents" value="true" />
   <Var name="OptimizeMethods" value="true" />
+  <Var name="SuppressIldasm" value="true" />
 
   <Module file="$(InPath)\BonelabUtilityMod.dll">
 

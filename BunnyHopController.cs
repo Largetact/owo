@@ -7,12 +7,9 @@ using System;
 
 namespace BonelabUtilityMod
 {
-    public enum AirStrafeMode { EASY, SOURCE }
-
     /// <summary>
-    /// Bunny Hop controller — supports two air-strafe modes:
-    /// EASY: Hold W + Space, turn camera to redirect. Instant velocity snap, no air friction.
-    /// SOURCE: Classic Quake/Source air acceleration. Strafe + turn to build speed.
+    /// Bunny Hop controller with Easy air-strafe:
+    /// Hold W + Space, turn camera to redirect. Instant velocity snap, no air friction.
     /// </summary>
     public static class BunnyHopController
     {
@@ -20,10 +17,11 @@ namespace BonelabUtilityMod
         private static bool _enabled = false;
         private static float _hopBoost = 1.5f;        // extra horizontal speed added per hop (m/s)
         private static float _maxSpeed = 50f;          // horizontal speed cap
-        private static float _airStrafeForce = 12f;    // Easy: min strafe speed / Source: air accel multiplier
+        private static float _airStrafeForce = 12f;    // Easy: min strafe speed
         private static float _jumpForce = 5.5f;        // upward velocity on hop
         private static bool _autoHop = true;            // hold A to keep hopping
-        private static AirStrafeMode _airStrafeMode = AirStrafeMode.EASY;
+        private static bool _autoJumpToggle = false;    // press jump once to start auto-hop, press again to stop
+        private static bool _autoJumpActive = false;    // runtime state: is auto-jump currently toggled on?
         private static float _standableNormal = 0.7f;  // Source sv_standable_normal (0.7 = ~45°)
         private static bool _trimpEnabled = true;        // TF2-style trimp: hop off ramps to convert speed to height
         private static float _trimpMultiplier = 1.0f;    // how aggressively horizontal speed converts to vertical
@@ -59,7 +57,7 @@ namespace BonelabUtilityMod
         public static float AirStrafeForce { get => _airStrafeForce; set => _airStrafeForce = Mathf.Clamp(value, 0f, 50f); }
         public static float JumpForce { get => _jumpForce; set => _jumpForce = Mathf.Clamp(value, 1f, 20f); }
         public static bool AutoHop { get => _autoHop; set => _autoHop = value; }
-        public static AirStrafeMode StrafeMode { get => _airStrafeMode; set => _airStrafeMode = value; }
+        public static bool AutoJumpToggle { get => _autoJumpToggle; set { _autoJumpToggle = value; if (!value) _autoJumpActive = false; } }
         public static float StandableNormal { get => _standableNormal; set => _standableNormal = Mathf.Clamp(value, 0f, 1f); }
         public static bool TrimpEnabled { get => _trimpEnabled; set => _trimpEnabled = value; }
         public static float TrimpMultiplier { get => _trimpMultiplier; set => _trimpMultiplier = Mathf.Clamp(value, 0f, 3f); }
@@ -76,6 +74,7 @@ namespace BonelabUtilityMod
             _onSurfRamp = false;
             _surfNormal = Vector3.up;
             _didJump = false;
+            _autoJumpActive = false;
         }
 
         public static void Update()
@@ -97,6 +96,11 @@ namespace BonelabUtilityMod
                 bool rawGrounded = IsGrounded(physRig);
                 bool jumpHeld = IsJumpPressed();
 
+                // Auto Jump Toggle: detect rising edge BEFORE ground check
+                // so player can toggle off while airborne
+                if (_autoJumpToggle && jumpHeld && !_wasJumpHeld)
+                    _autoJumpActive = !_autoJumpActive;
+
                 // Cache rigidbodies periodically
                 RefreshRbCache(rigManager);
 
@@ -114,7 +118,12 @@ namespace BonelabUtilityMod
                 {
                     bool shouldHop = false;
 
-                    if (_autoHop)
+                    // Auto Jump Toggle: state already toggled above (works in air too)
+                    if (_autoJumpToggle)
+                    {
+                        shouldHop = _autoJumpActive;
+                    }
+                    else if (_autoHop)
                     {
                         shouldHop = jumpHeld;
                     }
@@ -140,7 +149,7 @@ namespace BonelabUtilityMod
                     // On a surf ramp — trimp or air strafe
                     if (_trimpEnabled)
                     {
-                        bool shouldTrimp = _autoHop ? jumpHeld : (jumpHeld && !_wasJumpHeld);
+                        bool shouldTrimp = _autoJumpToggle ? _autoJumpActive : (_autoHop ? jumpHeld : (jumpHeld && !_wasJumpHeld));
                         if (shouldTrimp)
                         {
                             PerformTrimpHop(physRig);
@@ -300,30 +309,13 @@ namespace BonelabUtilityMod
                 // Use preserved speed from last airborne phase so ground friction doesn't kill chain hops
                 float baseSpeed = Mathf.Max(currentHSpeed, _preservedSpeed);
 
-                if (_airStrafeMode == AirStrafeMode.EASY)
-                {
-                    Vector3 hopDir = GetCameraRelativeWishDir();
+                Vector3 hopDir = GetCameraRelativeWishDir();
 
-                    float hopSpeed = Mathf.Max(baseSpeed, _airStrafeForce);
-                    hopSpeed += _hopBoost;
-                    hopSpeed = Mathf.Min(hopSpeed, _maxSpeed);
+                float hopSpeed = Mathf.Max(baseSpeed, _airStrafeForce);
+                hopSpeed += _hopBoost;
+                hopSpeed = Mathf.Min(hopSpeed, _maxSpeed);
 
-                    horizontalVel = hopDir * hopSpeed;
-                }
-                else
-                {
-                    // SOURCE: preserve current velocity direction, add boost
-                    if (baseSpeed > 0.5f && baseSpeed < _maxSpeed)
-                    {
-                        Vector3 boostDir = currentHSpeed > 0.5f
-                            ? horizontalVel.normalized
-                            : GetCameraRelativeWishDir();
-                        horizontalVel = boostDir * baseSpeed + boostDir * _hopBoost;
-
-                        if (horizontalVel.magnitude > _maxSpeed)
-                            horizontalVel = horizontalVel.normalized * _maxSpeed;
-                    }
-                }
+                horizontalVel = hopDir * hopSpeed;
 
                 Vector3 hopVelocity = new Vector3(horizontalVel.x, _jumpForce, horizontalVel.z);
 
@@ -445,10 +437,7 @@ namespace BonelabUtilityMod
 
         private static void ApplyAirStrafe(PhysicsRig physRig, RigManager rigManager)
         {
-            if (_airStrafeMode == AirStrafeMode.EASY)
-                ApplyAirStrafeEasy(physRig);
-            else
-                ApplyAirStrafeSource(physRig);
+            ApplyAirStrafeEasy(physRig);
         }
 
         /// <summary>
@@ -521,108 +510,6 @@ namespace BonelabUtilityMod
                 }
             }
             catch { }
-        }
-
-        // Source/Quake constants — scaled for Unity meter-scale (Source uses ~2.54cm/unit)
-        private const float SV_AIRACCELERATE = 10f;
-        private const float SV_MAXAIRSPEED = 1.0f;   // ~30 Source units → ~0.76m, rounded to 1m/s
-
-        /// <summary>
-        /// SOURCE mode: Classic Quake/Source air acceleration.
-        /// Hold A or D (no W!) and smoothly turn your camera into the strafe.
-        /// Speed builds through the dot-product mechanic. AirStrafeForce scales the accel.
-        /// </summary>
-        private static void ApplyAirStrafeSource(PhysicsRig physRig)
-        {
-            if (_cachedRbs == null || _cachedRbs.Length == 0) return;
-
-            try
-            {
-                var pelvisRb = physRig.torso?.rbPelvis;
-                if (pelvisRb == null) return;
-
-                Vector3 vel = pelvisRb.velocity;
-                Vector3 horizontalVel = new Vector3(vel.x, 0f, vel.z);
-
-                // No air friction in Source either — counteract engine drag
-                float currentSpeed = horizontalVel.magnitude;
-                if (currentSpeed > _preservedSpeed)
-                    _preservedSpeed = currentSpeed;
-                if (currentSpeed < _preservedSpeed && currentSpeed > 0.1f)
-                {
-                    horizontalVel = horizontalVel.normalized * _preservedSpeed;
-                    currentSpeed = _preservedSpeed;
-                }
-
-                Vector2 input = GetMoveInput();
-                if (input.sqrMagnitude < 0.1f)
-                {
-                    // No input — just apply drag correction and return
-                    ApplyHorizontalVelocity(horizontalVel);
-                    return;
-                }
-
-                var cam = Camera.main;
-                if (cam == null) return;
-
-                Vector3 camForward = cam.transform.forward;
-                camForward.y = 0f;
-                camForward.Normalize();
-                Vector3 camRight = cam.transform.right;
-                camRight.y = 0f;
-                camRight.Normalize();
-                if (camForward.sqrMagnitude < 0.001f) return;
-
-                // Wish direction from thumbstick
-                Vector3 wishDir = (camForward * input.y + camRight * input.x).normalized;
-                float wishSpeed = SV_MAXAIRSPEED;
-
-                // Source air acceleration formula:
-                // currentspeed = dot(velocity, wishdir)
-                // addspeed = wishspeed - currentspeed
-                // if addspeed <= 0: no acceleration
-                // accelspeed = accel * dt * wishspeed
-                // if accelspeed > addspeed: accelspeed = addspeed
-                // velocity += wishdir * accelspeed
-                float currentSpeedInWishDir = Vector3.Dot(horizontalVel, wishDir);
-                float addSpeed = wishSpeed - currentSpeedInWishDir;
-                if (addSpeed <= 0f)
-                {
-                    ApplyHorizontalVelocity(horizontalVel);
-                    return;
-                }
-
-                float accel = SV_AIRACCELERATE * (_airStrafeForce / 12f); // scale by user setting
-                float accelSpeed = accel * Time.deltaTime * wishSpeed;
-                if (accelSpeed > addSpeed)
-                    accelSpeed = addSpeed;
-
-                Vector3 newHorizontal = horizontalVel + wishDir * accelSpeed;
-
-                // Clamp to max speed
-                if (newHorizontal.magnitude > _maxSpeed)
-                    newHorizontal = newHorizontal.normalized * _maxSpeed;
-
-                // Update preserved speed
-                if (newHorizontal.magnitude > _preservedSpeed)
-                    _preservedSpeed = newHorizontal.magnitude;
-
-                ApplyHorizontalVelocity(newHorizontal);
-            }
-            catch { }
-        }
-
-        private static void ApplyHorizontalVelocity(Vector3 newHorizontal)
-        {
-            if (_cachedRbs == null) return;
-            foreach (var rb in _cachedRbs)
-            {
-                if (rb != null && rb.mass > 1f)
-                {
-                    float yVel = rb.velocity.y;
-                    rb.velocity = new Vector3(newHorizontal.x, yVel, newHorizontal.z);
-                }
-            }
         }
     }
 }

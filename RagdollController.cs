@@ -49,7 +49,7 @@ namespace BonelabUtilityMod
 
         // ───── Mode ─────
         private static RagdollMode _mode = RagdollMode.LIMP;
-        private static bool _tantrumMode = false; // ENABLED = old basic ragdoll, DISABLED = new LIMP/ARM_CONTROL
+        private static bool _tantrumMode = false; // ENABLED = legs go limp/flail, upper body stays controlled
 
         // ───── Grab Detection ─────
         private static bool _grabEnabled = true;
@@ -952,22 +952,25 @@ namespace BonelabUtilityMod
 
         /// <summary>
         /// Apply the ragdoll mode.
-        /// Tantrum mode now respects the selected mode (LIMP vs ARM_CONTROL).
+        /// Tantrum mode: legs go limp/flail but upper body + arms stay controlled.
         /// ARM_CONTROL: legs go limp, arms follow VR controllers, head tracks for look-around.
         /// LIMP: full shutdown, no auto-recovery.
         /// </summary>
         private static void ApplyRagdollMode(PhysicsRig physRig)
         {
-            // Both modes and tantrum start with RagdollRig (proven reliable)
-            physRig.RagdollRig();
-
-            if (_tantrumMode && _mode == RagdollMode.LIMP)
+            if (_tantrumMode)
             {
-                // Tantrum + LIMP: just RagdollRig (basic tantrum behavior) 
-                // plus full shutdown so no auto-recovery
-                physRig.ShutdownRig();
+                // Tantrum: only legs go limp — upper body stays fully controlled.
+                // Do NOT call RagdollRig() or ShutdownRig() so arms/head still track VR.
+                physRig.DisableBallLoco();
+                physRig.PhysicalLegs();
+                physRig.legLf.ShutdownLimb();
+                physRig.legRt.ShutdownLimb();
                 return;
             }
+
+            // Non-tantrum modes: start with RagdollRig (proven reliable)
+            physRig.RagdollRig();
 
             if (_mode == RagdollMode.ARM_CONTROL)
             {

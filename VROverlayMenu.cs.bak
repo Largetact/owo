@@ -1,0 +1,1158 @@
+using MelonLoader;
+using UnityEngine;
+using BoneLib;
+using System;
+using System.Collections.Generic;
+
+namespace BonelabUtilityMod
+{
+    /// <summary>
+    /// Seralyth-style 3D wrist menu.
+    /// A physical panel attached above the left hand, rendered in world space
+    /// using TextMesh lines. Visible when left palm faces upward toward the head.
+    ///
+    /// Controls:
+    ///   Show:               Turn left palm toward your face (like checking a watch)
+    ///   Hide:               Turn palm away, or press B
+    ///   Navigate up/down:   Right Thumbstick
+    ///   Adjust value:       Right Thumbstick left/right
+    ///   Select / Expand:    A button
+    ///   Back / Collapse:    B button
+    ///   Switch Page:        Left Thumbstick left/right
+    ///   Alt Toggle:         Left Grip + Y
+    /// </summary>
+    public static class VROverlayMenu
+    {
+        // ═══════════════════════════════════════════
+        //  Menu State
+        // ═══════════════════════════════════════════
+
+        private static bool _visible;
+        private static int _currentPage;
+        private static int _cursorIndex;
+        private static int _scrollOffset;
+
+        // ─── Input debounce ───
+        private static float _lastNavTime;
+        private const float NAV_REPEAT = 0.18f;
+        private const float NAV_INITIAL = 0.3f;
+        private static float _navHeld;
+        private static bool _wasNav;
+        private static float _lastPageTime;
+        private const float PAGE_DELAY = 0.25f;
+        private static bool _wasA, _wasB, _wasY;
+        private static bool _wasTrigger;
+        private static bool _laserHovering;
+        private static float _hideTime;  // prevents palm re-open after Grip+Y
+
+        // ─── Palm detection ───
+        private const float PALM_OPEN_DOT = 0.5f;
+        private const float PALM_CLOSE_DOT = 0.15f;
+        private const float PALM_CLOSE_DELAY = 0.6f;
+        private static float _palmCloseTimer;
+
+        // ─── Panel dimensions (world-space meters) ───
+        private const float PW = 0.16f;
+        private const float PH = 0.20f;
+        private const float CS = 0.0022f;  // characterSize
+        private const float LH = 0.008f;   // line height
+        private const int MAX_LINES = 18;
+        private const float CONTENT_START_Y = PH * 0.5f - 0.038f;
+        private const float TITLE_Y = PH * 0.5f - 0.005f;
+        private const float HINT_Y = PH * 0.5f - 0.018f;
+
+        // ─── Collapsible section state ───
+        private static bool _pGodMode, _pDash, _pFlight, _pRagdoll, _pBunnyHop;
+        private static bool _pAntiConstraint, _pAntiKnockout, _pUnbreakGrip, _pForceGrab;
+        private static bool _pAntiGravChange, _pAutoRun, _pGhostMode;
+        private static bool _pAntiRagdoll, _pAntiSlowmo, _pAntiTeleport, _pSpinbot;
+        private static bool _cExpPunch, _cGroundSlam, _cExpImpact, _cRandExplode;
+        private static bool _cFullAuto, _cInfAmmo, _cDamageMult, _cChaosGun;
+        private static bool _lMain = true;
+        private static bool _cosWeepingAngel, _cosAvatarCopier, _cosBodyLogColor;
+        private static bool _uDespawn, _uAntiDespawn, _uSpawnLimiter, _uForceSpawner;
+        private static bool _uTeleport, _uWaypoints, _uMapChange, _uNotifications;
+        private static bool _uXyzScale, _uAvatarFx, _uHolsterHider;
+        private static bool _nAutoHost, _nServerQueue, _nFreezePlayer, _nBlockSystem;
+        private static bool _nScreenShare, _nPlayerInfo;
+
+        // ─── Item Data Model ───
+        private enum ItemType { Header, Toggle, Slider, Button, Label, EnumCycle }
+        private struct MenuItem
+        {
+            public ItemType Type;
+            public string Label;
+            public bool BoolValue;
+            public Action<bool> OnBoolChanged;
+            public float FloatValue, Min, Max, Step;
+            public Action<float> OnFloatChanged;
+            public string FloatFmt;
+            public Action OnClick;
+            public string[] EnumNames;
+            public int EnumIndex;
+            public Action<int> OnEnumChanged;
+            public bool Expanded;
+            public Action<bool> OnExpandChanged;
+        }
+        private static readonly List<MenuItem> _items = new List<MenuItem>(128);
+
+        // ═══════════════════════════════════════════
+        //  3D Panel Objects
+        // ═══════════════════════════════════════════
+
+        private static bool _created;
+        private static GameObject _root;
+        private static GameObject _bgQuad;
+        private static GameObject _cursorQuad;
+        private static MeshRenderer _cursorRend;
+        private static TextMesh _titleTM;
+        private static TextMesh _hintTM;
+        private static TextMesh[] _lineTMs;
+        private static MeshRenderer[] _lineRends;
+        private static Font _font;
+
+        // ─── Laser pointer ───
+        private static GameObject _laserObj;
+        private static LineRenderer _laserLR;
+        private static GameObject _laserDot;
+        private static MeshRenderer _laserDotRend;
+
+        public static bool IsVisible => _visible;
+
+        private static readonly string[] PageNames = {
+            "Player", "Combat", "Launcher", "Cosmetics",
+            "Utility", "Network", "Avatar", "Settings"
+        };
+
+        // ═══════════════════════════════════════════
+        //  Public API
+        // ═══════════════════════════════════════════
+
+        public static void CheckInput()
+        {
+            // ─── Palm detection: show when left palm faces head ───
+            Transform handT = null, headT = null;
+            try
+            {
+                var hand = Player.LeftHand;
+                if (hand != null) handT = ((Component)hand).transform;
+                headT = Player.Head;
+            }
+            catch { }
+
+            if (handT != null && headT != null)
+            {
+                Vector3 toHead = (headT.position - handT.position).normalized;
+                float dot = Vector3.Dot(handT.up, toHead);
+
+                if (!_visible && dot > PALM_OPEN_DOT && Time.unscaledTime - _hideTime > 1.0f)
+                {
+                    _visible = true;
+                    _cursorIndex = 0;
+                    _scrollOffset = 0;
+                    _palmCloseTimer = 0f;
+                }
+                else if (_visible && dot < PALM_CLOSE_DOT)
+                {
+                    _palmCloseTimer += Time.unscaledDeltaTime;
+                    if (_palmCloseTimer > PALM_CLOSE_DELAY) _visible = false;
+                }
+                else
+                {
+                    _palmCloseTimer = 0f;
+                }
+            }
+
+            // ─── Grip + Y: always hides ───
+            bool gripHeld = false;
+            try { gripHeld = Input.GetAxis("Oculus_CrossPlatform_PrimaryHandTrigger") > 0.7f; } catch { }
+            bool yDown = Input.GetKey(KeyCode.JoystickButton3);
+            if (gripHeld && yDown && !_wasY && _visible)
+            {
+                _visible = false;
+                _hideTime = Time.unscaledTime;
+            }
+            _wasY = yDown;
+
+            if (!_visible) return;
+
+            float t = Time.unscaledTime;
+
+            // ─── Right thumbstick: navigate + adjust ───
+            Vector2 rs = Vector2.zero;
+            try { var rc = Player.RightController; if (rc != null) rs = rc.GetThumbStickAxis(); } catch { }
+
+            bool nav = Mathf.Abs(rs.y) > 0.5f;
+            if (nav)
+            {
+                if (!_wasNav) { Move(rs.y < 0f ? 1 : -1); _lastNavTime = t; _navHeld = 0f; }
+                else
+                {
+                    _navHeld += Time.unscaledDeltaTime;
+                    float d = _navHeld < NAV_INITIAL ? NAV_INITIAL : NAV_REPEAT;
+                    if (t - _lastNavTime >= d) { Move(rs.y < 0f ? 1 : -1); _lastNavTime = t; }
+                }
+            }
+            else { _navHeld = 0f; }
+            _wasNav = nav;
+
+            if (Mathf.Abs(rs.x) > 0.6f && t - _lastNavTime >= NAV_REPEAT)
+            {
+                Adjust(rs.x > 0f ? 1 : -1);
+                _lastNavTime = t;
+            }
+
+            // ─── Left thumbstick: switch pages ───
+            Vector2 ls = Vector2.zero;
+            try { var lc = Player.LeftController; if (lc != null) ls = lc.GetThumbStickAxis(); } catch { }
+            if (Mathf.Abs(ls.x) > 0.7f && t - _lastPageTime >= PAGE_DELAY)
+            {
+                _currentPage = (_currentPage + (ls.x > 0f ? 1 : -1) + PageNames.Length) % PageNames.Length;
+                _cursorIndex = 0; _scrollOffset = 0;
+                _lastPageTime = t;
+            }
+
+            // ─── Right trigger: laser click (activate hovered item) ───
+            float rTrig = 0f;
+            try { rTrig = Input.GetAxis("Oculus_CrossPlatform_SecondaryIndexTrigger"); } catch { }
+            bool trigDown = rTrig > 0.7f;
+            if (trigDown && !_wasTrigger && _laserHovering) Activate();
+            _wasTrigger = trigDown;
+
+            // ─── A: activate, B: collapse/close ───
+            bool a = Input.GetKey(KeyCode.JoystickButton0);
+            if (a && !_wasA) Activate();
+            _wasA = a;
+
+            bool b = Input.GetKey(KeyCode.JoystickButton1);
+            if (b && !_wasB) Back();
+            _wasB = b;
+        }
+
+        /// <summary>Called from OnUpdate after CheckInput — manages 3D panel.</summary>
+        public static void UpdatePanel()
+        {
+            if (!_visible)
+            {
+                if (_created && _root != null) _root.SetActive(false);
+                if (_laserObj != null) _laserObj.SetActive(false);
+                if (_laserDot != null) _laserDot.SetActive(false);
+                return;
+            }
+
+            if (!_created) CreatePanel();
+            if (_root == null) { _created = false; return; }
+            _root.SetActive(true);
+
+            // ─── Position panel above left hand ───
+            Transform handT = null;
+            try { var h = Player.LeftHand; if (h != null) handT = ((Component)h).transform; } catch { }
+            if (handT == null) { _root.SetActive(false); return; }
+
+            Vector3 pos = handT.position
+                + handT.up * 0.08f
+                - handT.forward * 0.04f;
+            // Panel faces TOWARD the player (negate forward so text reads correctly)
+            Quaternion rot = Quaternion.LookRotation(-handT.up, handT.forward);
+            _root.transform.position = Vector3.Lerp(_root.transform.position, pos, 12f * Time.unscaledDeltaTime);
+            _root.transform.rotation = Quaternion.Slerp(_root.transform.rotation, rot, 12f * Time.unscaledDeltaTime);
+
+            // ─── Build items for current page ───
+            _items.Clear();
+            switch (_currentPage)
+            {
+                case 0: BuildPlayerPage(); break;
+                case 1: BuildCombatPage(); break;
+                case 2: BuildLauncherPage(); break;
+                case 3: BuildCosmeticsPage(); break;
+                case 4: BuildUtilityPage(); break;
+                case 5: BuildNetworkPage(); break;
+                case 6: BuildAvatarPage(); break;
+                case 7: BuildSettingsPage(); break;
+            }
+
+            if (_cursorIndex >= _items.Count && _items.Count > 0)
+                _cursorIndex = _items.Count - 1;
+            EnsureVisible();
+
+            // ─── Update title ───
+            _titleTM.text = $"\u25C0  {PageNames[_currentPage]}  [{_currentPage + 1}/{PageNames.Length}]  \u25B6";
+
+            // ─── Update content lines ───
+            int visEnd = Mathf.Min(_scrollOffset + MAX_LINES, _items.Count);
+            for (int i = 0; i < MAX_LINES; i++)
+            {
+                int idx = _scrollOffset + i;
+                if (idx >= _items.Count)
+                {
+                    _lineTMs[i].text = "";
+                    continue;
+                }
+                var item = _items[idx];
+                bool cur = (idx == _cursorIndex);
+                _lineTMs[i].text = FormatItem(item, cur);
+                _lineTMs[i].color = GetItemColor(item, cur);
+            }
+
+            // ─── Position cursor highlight ───
+            if (_cursorIndex >= _scrollOffset && _cursorIndex < _scrollOffset + MAX_LINES)
+            {
+                _cursorQuad.SetActive(true);
+                int visualIdx = _cursorIndex - _scrollOffset;
+                float cy = CONTENT_START_Y - visualIdx * LH - LH * 0.35f;
+                _cursorQuad.transform.localPosition = new Vector3(0f, cy, -0.001f);
+            }
+            else
+            {
+                _cursorQuad.SetActive(false);
+            }
+
+            // ═══════════════════════════════════════════
+            //  Laser Pointer Raycast
+            // ═══════════════════════════════════════════
+            _laserHovering = false;
+            Transform rHandT = null;
+            try { var rh = Player.RightHand; if (rh != null) rHandT = ((Component)rh).transform; } catch { }
+
+            if (rHandT != null && _root != null && _laserObj != null)
+            {
+                Vector3 rayOrigin = rHandT.position;
+                Vector3 rayDir = rHandT.forward;
+
+                // Panel forward points away from its face (Quad renders on -Z local).
+                // Use negative forward as the plane normal so the plane faces the viewer.
+                Plane panelPlane = new Plane(-_root.transform.forward, _root.transform.position);
+                Ray ray = new Ray(rayOrigin, rayDir);
+
+                if (panelPlane.Raycast(ray, out float enter) && enter > 0.05f && enter < 1.5f)
+                {
+                    Vector3 worldHit = rayOrigin + rayDir * enter;
+                    Vector3 localHit = _root.transform.InverseTransformPoint(worldHit);
+
+                    float halfW = PW * 0.5f;
+                    float contentBottom = CONTENT_START_Y - (_items.Count - _scrollOffset) * LH;
+                    float contentTop = CONTENT_START_Y + LH * 0.5f;
+
+                    // Check if hit is in PAGE TAB zone (above content, below top edge)
+                    float pageZoneTop = PH * 0.5f;
+                    float pageZoneBot = CONTENT_START_Y + LH * 0.5f;
+                    if (Mathf.Abs(localHit.x) < halfW &&
+                        localHit.y > pageZoneBot && localHit.y < pageZoneTop)
+                    {
+                        // Map X across panel width to page index
+                        float normX = (localHit.x + halfW) / PW; // 0..1
+                        int pageIdx = Mathf.Clamp(Mathf.FloorToInt(normX * PageNames.Length), 0, PageNames.Length - 1);
+                        if (pageIdx != _currentPage)
+                        {
+                            _currentPage = pageIdx;
+                            _cursorIndex = 0;
+                            _scrollOffset = 0;
+                        }
+                        _laserHovering = true;
+                    }
+
+                    // Check if hit is within panel content bounds
+                    if (Mathf.Abs(localHit.x) < halfW &&
+                        localHit.y < contentTop &&
+                        localHit.y > CONTENT_START_Y - MAX_LINES * LH - LH)
+                    {
+                        int lineIdx = Mathf.FloorToInt((CONTENT_START_Y - localHit.y) / LH);
+                        lineIdx = Mathf.Clamp(lineIdx, 0, MAX_LINES - 1);
+                        int itemIdx = _scrollOffset + lineIdx;
+                        if (itemIdx < _items.Count)
+                        {
+                            _cursorIndex = itemIdx;
+                            _laserHovering = true;
+                        }
+                    }
+
+                    // Show laser beam and dot if pointing at panel area
+                    bool onPanel = Mathf.Abs(localHit.x) < halfW + 0.02f &&
+                                   localHit.y < PH * 0.5f + 0.01f &&
+                                   localHit.y > -PH * 0.5f - 0.01f;
+                    if (onPanel)
+                    {
+                        _laserObj.SetActive(true);
+                        _laserLR.SetPosition(0, rayOrigin);
+                        _laserLR.SetPosition(1, worldHit);
+
+                        _laserDot.SetActive(true);
+                        _laserDot.transform.position = worldHit - _root.transform.forward * 0.001f;
+                    }
+                    else
+                    {
+                        // Show short ray pointing in general direction
+                        _laserObj.SetActive(true);
+                        _laserLR.SetPosition(0, rayOrigin);
+                        _laserLR.SetPosition(1, rayOrigin + rayDir * 0.4f);
+                        _laserDot.SetActive(false);
+                    }
+                }
+                else
+                {
+                    // Ray doesn't hit panel plane in range — show short idle ray
+                    _laserObj.SetActive(true);
+                    _laserLR.SetPosition(0, rayOrigin);
+                    _laserLR.SetPosition(1, rayOrigin + rayDir * 0.4f);
+                    _laserDot.SetActive(false);
+                }
+            }
+            else
+            {
+                if (_laserObj != null) _laserObj.SetActive(false);
+                if (_laserDot != null) _laserDot.SetActive(false);
+            }
+        }
+
+        /// <summary>No-op — rendering is 3D world-space now. Kept for API compat.</summary>
+        public static void Draw() { }
+
+        /// <summary>Cleanup when level unloads — clear stale references.</summary>
+        public static void OnLevelUnloaded()
+        {
+            if (_root != null) _root.SetActive(false);
+            if (_laserObj != null) _laserObj.SetActive(false);
+            if (_laserDot != null) _laserDot.SetActive(false);
+            _visible = false;
+        }
+
+        // ═══════════════════════════════════════════
+        //  Input Helpers
+        // ═══════════════════════════════════════════
+
+        private static void Move(int dir)
+        {
+            if (_items.Count == 0) return;
+            _cursorIndex = Mathf.Clamp(_cursorIndex + dir, 0, _items.Count - 1);
+            EnsureVisible();
+        }
+
+        private static void EnsureVisible()
+        {
+            if (_cursorIndex < _scrollOffset)
+                _scrollOffset = _cursorIndex;
+            else if (_cursorIndex >= _scrollOffset + MAX_LINES)
+                _scrollOffset = _cursorIndex - MAX_LINES + 1;
+            _scrollOffset = Mathf.Max(0, _scrollOffset);
+        }
+
+        private static void Activate()
+        {
+            if (_cursorIndex < 0 || _cursorIndex >= _items.Count) return;
+            var item = _items[_cursorIndex];
+            switch (item.Type)
+            {
+                case ItemType.Header:
+                    item.OnExpandChanged?.Invoke(!item.Expanded);
+                    break;
+                case ItemType.Toggle:
+                    item.OnBoolChanged?.Invoke(!item.BoolValue);
+                    SettingsManager.MarkDirty();
+                    break;
+                case ItemType.Button:
+                    item.OnClick?.Invoke();
+                    break;
+                case ItemType.EnumCycle:
+                    if (item.EnumNames != null && item.EnumNames.Length > 0)
+                    {
+                        item.OnEnumChanged?.Invoke((item.EnumIndex + 1) % item.EnumNames.Length);
+                        SettingsManager.MarkDirty();
+                    }
+                    break;
+                case ItemType.Slider:
+                    break; // use left/right to adjust
+            }
+        }
+
+        private static void Adjust(int dir)
+        {
+            if (_cursorIndex < 0 || _cursorIndex >= _items.Count) return;
+            var item = _items[_cursorIndex];
+            switch (item.Type)
+            {
+                case ItemType.Slider:
+                    float step = item.Step > 0f ? item.Step : (item.Max - item.Min) * 0.05f;
+                    item.OnFloatChanged?.Invoke(Mathf.Clamp(item.FloatValue + step * dir, item.Min, item.Max));
+                    SettingsManager.MarkDirty();
+                    break;
+                case ItemType.Toggle:
+                    item.OnBoolChanged?.Invoke(dir > 0);
+                    SettingsManager.MarkDirty();
+                    break;
+                case ItemType.EnumCycle:
+                    if (item.EnumNames != null && item.EnumNames.Length > 0)
+                    {
+                        item.OnEnumChanged?.Invoke((item.EnumIndex + dir + item.EnumNames.Length) % item.EnumNames.Length);
+                        SettingsManager.MarkDirty();
+                    }
+                    break;
+            }
+        }
+
+        private static void Back()
+        {
+            if (_cursorIndex >= 0 && _cursorIndex < _items.Count)
+            {
+                for (int i = _cursorIndex; i >= 0; i--)
+                {
+                    if (_items[i].Type == ItemType.Header && _items[i].Expanded)
+                    {
+                        _items[i].OnExpandChanged?.Invoke(false);
+                        _cursorIndex = i;
+                        return;
+                    }
+                }
+            }
+            _visible = false;
+        }
+
+        // ═══════════════════════════════════════════
+        //  Panel Creation
+        // ═══════════════════════════════════════════
+
+        private static void CreatePanel()
+        {
+            if (_created) return;
+
+            Shader shader = Shader.Find("Sprites/Default");
+            if (shader == null) shader = Shader.Find("Hidden/Internal-Colored");
+            if (shader == null) shader = Shader.Find("Unlit/Color");
+
+            _font = null;
+            try { _font = Resources.GetBuiltinResource<Font>("Arial.ttf"); } catch { }
+            if (_font == null) try { _font = Font.CreateDynamicFontFromOSFont("Arial", 64); } catch { }
+
+            // ─── Root ───
+            _root = new GameObject("VR_WristMenu");
+            UnityEngine.Object.DontDestroyOnLoad(_root);
+
+            // ─── Background Quad ───
+            _bgQuad = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            _bgQuad.name = "WM_BG";
+            SafeDestroyCollider(_bgQuad);
+            _bgQuad.transform.SetParent(_root.transform, false);
+            _bgQuad.transform.localPosition = Vector3.zero;
+            _bgQuad.transform.localScale = new Vector3(PW, PH, 1f);
+            var bgMat = new Material(shader);
+            bgMat.color = new Color(0.05f, 0.05f, 0.09f, 0.93f);
+            bgMat.renderQueue = 3000;
+            _bgQuad.GetComponent<MeshRenderer>().material = bgMat;
+
+            // ─── Border Quad (slightly larger, different color) ───
+            var border = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            border.name = "WM_Border";
+            SafeDestroyCollider(border);
+            border.transform.SetParent(_root.transform, false);
+            border.transform.localPosition = new Vector3(0f, 0f, 0.0005f);
+            border.transform.localScale = new Vector3(PW + 0.006f, PH + 0.006f, 1f);
+            var borderMat = new Material(shader);
+            borderMat.color = new Color(0f, 0.6f, 0.8f, 0.7f);
+            borderMat.renderQueue = 2999;
+            border.GetComponent<MeshRenderer>().material = borderMat;
+
+            // ─── Cursor Highlight Quad ───
+            _cursorQuad = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            _cursorQuad.name = "WM_Cursor";
+            SafeDestroyCollider(_cursorQuad);
+            _cursorQuad.transform.SetParent(_root.transform, false);
+            _cursorQuad.transform.localPosition = new Vector3(0f, 0f, -0.001f);
+            _cursorQuad.transform.localScale = new Vector3(PW * 0.94f, LH * 0.9f, 1f);
+            var curMat = new Material(shader);
+            curMat.color = new Color(0f, 0.55f, 0.75f, 0.45f);
+            curMat.renderQueue = 3010;
+            _cursorQuad.GetComponent<MeshRenderer>().material = curMat;
+            _cursorRend = _cursorQuad.GetComponent<MeshRenderer>();
+
+            // ─── Title Text ───
+            _titleTM = MakeText("WM_Title", CS * 1.3f, new Color(0f, 0.95f, 1f));
+            _titleTM.transform.localPosition = new Vector3(-PW * 0.45f, TITLE_Y, -0.002f);
+
+            // ─── Hint Text ───
+            _hintTM = MakeText("WM_Hint", CS * 0.7f, new Color(0.45f, 0.45f, 0.5f));
+            _hintTM.transform.localPosition = new Vector3(-PW * 0.45f, HINT_Y, -0.002f);
+            _hintTM.text = "Point+Trigger  LS:Page  B:Back";
+
+            // ─── Divider ───
+            var divider = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            divider.name = "WM_Divider";
+            SafeDestroyCollider(divider);
+            divider.transform.SetParent(_root.transform, false);
+            divider.transform.localPosition = new Vector3(0f, CONTENT_START_Y + LH * 0.3f, -0.0015f);
+            divider.transform.localScale = new Vector3(PW * 0.9f, 0.001f, 1f);
+            var divMat = new Material(shader);
+            divMat.color = new Color(0f, 0.6f, 0.8f, 0.5f);
+            divMat.renderQueue = 3005;
+            divider.GetComponent<MeshRenderer>().material = divMat;
+
+            // ─── Content Lines ───
+            _lineTMs = new TextMesh[MAX_LINES];
+            _lineRends = new MeshRenderer[MAX_LINES];
+            for (int i = 0; i < MAX_LINES; i++)
+            {
+                _lineTMs[i] = MakeText($"WM_L{i}", CS, new Color(0.85f, 0.85f, 0.85f));
+                _lineTMs[i].transform.localPosition = new Vector3(
+                    -PW * 0.45f,
+                    CONTENT_START_Y - i * LH,
+                    -0.002f);
+                _lineRends[i] = _lineTMs[i].GetComponent<MeshRenderer>();
+            }
+
+            // ─── Laser Pointer (NOT parented to _root — follows right hand independently) ───
+            _laserObj = new GameObject("WM_Laser");
+            UnityEngine.Object.DontDestroyOnLoad(_laserObj);
+            _laserLR = _laserObj.AddComponent<LineRenderer>();
+            _laserLR.useWorldSpace = true;
+            _laserLR.startWidth = 0.003f;
+            _laserLR.endWidth = 0.001f;
+            _laserLR.positionCount = 2;
+            _laserLR.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            _laserLR.receiveShadows = false;
+            Shader laserShader = Shader.Find("Universal Render Pipeline/Unlit");
+            if (laserShader == null) laserShader = Shader.Find("SLZ/SLZ Unlit");
+            if (laserShader == null) laserShader = Shader.Find("Unlit/Color");
+            if (laserShader == null) laserShader = Shader.Find("Hidden/Internal-Colored");
+            var laserMat = new Material(laserShader);
+            laserMat.color = new Color(0f, 0.9f, 1f, 0.8f);
+            laserMat.renderQueue = 3200;
+            _laserLR.material = laserMat;
+            _laserObj.SetActive(false);
+
+            // ─── Laser Dot (small sphere at hit point) ───
+            _laserDot = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            _laserDot.name = "WM_LaserDot";
+            SafeDestroyCollider(_laserDot);
+            UnityEngine.Object.DontDestroyOnLoad(_laserDot);
+            _laserDot.transform.localScale = new Vector3(0.006f, 0.006f, 0.006f);
+            var dotMat = new Material(shader);
+            dotMat.color = new Color(0f, 1f, 1f, 1f);
+            dotMat.renderQueue = 3210;
+            _laserDot.GetComponent<MeshRenderer>().material = dotMat;
+            _laserDotRend = _laserDot.GetComponent<MeshRenderer>();
+            _laserDot.SetActive(false);
+
+            _root.SetActive(false);
+            _created = true;
+        }
+
+        private static TextMesh MakeText(string name, float charSize, Color color)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(_root.transform, false);
+            go.AddComponent<MeshRenderer>();
+            var tm = go.AddComponent<TextMesh>();
+            tm.characterSize = charSize;
+            tm.fontSize = 64;
+            tm.color = color;
+            tm.anchor = TextAnchor.UpperLeft;
+            tm.richText = false;
+            tm.text = "";
+            if (_font != null)
+            {
+                tm.font = _font;
+                var mr = go.GetComponent<MeshRenderer>();
+                if (_font.material != null) mr.material = _font.material;
+            }
+            var rend = go.GetComponent<MeshRenderer>();
+            if (rend != null && rend.material != null)
+                rend.material.renderQueue = 3100;
+            return tm;
+        }
+
+        private static void SafeDestroyCollider(GameObject go)
+        {
+            var col = go.GetComponent<Collider>();
+            if (col != null) UnityEngine.Object.Destroy((UnityEngine.Object)(object)col);
+        }
+
+        // ═══════════════════════════════════════════
+        //  Item Formatting for TextMesh
+        // ═══════════════════════════════════════════
+
+        private static string FormatItem(MenuItem item, bool cur)
+        {
+            switch (item.Type)
+            {
+                case ItemType.Header:
+                    return (item.Expanded ? "\u25BC " : "\u25BA ") + item.Label;
+                case ItemType.Toggle:
+                    return "  " + item.Label + (item.BoolValue ? "  ON" : "  OFF");
+                case ItemType.Slider:
+                    string fmt = item.FloatFmt ?? "F1";
+                    return "  " + item.Label + ": " + item.FloatValue.ToString(fmt);
+                case ItemType.Button:
+                    return "  \u25B8 " + item.Label;
+                case ItemType.Label:
+                    return "  " + item.Label;
+                case ItemType.EnumCycle:
+                    string val = (item.EnumNames != null && item.EnumIndex >= 0 && item.EnumIndex < item.EnumNames.Length)
+                        ? item.EnumNames[item.EnumIndex] : "?";
+                    return "  " + item.Label + ": " + val;
+                default:
+                    return "";
+            }
+        }
+
+        private static Color GetItemColor(MenuItem item, bool cur)
+        {
+            switch (item.Type)
+            {
+                case ItemType.Header:
+                    return cur ? Color.white : new Color(0f, 0.9f, 1f);
+                case ItemType.Toggle:
+                    if (item.BoolValue)
+                        return cur ? new Color(0.4f, 1f, 0.7f) : new Color(0f, 0.85f, 0.45f);
+                    else
+                        return cur ? new Color(1f, 0.6f, 0.6f) : new Color(0.7f, 0.25f, 0.25f);
+                case ItemType.Slider:
+                    return cur ? Color.white : new Color(0.75f, 0.75f, 0.8f);
+                case ItemType.Button:
+                    return cur ? Color.yellow : new Color(0.3f, 0.7f, 1f);
+                case ItemType.Label:
+                    return new Color(0.5f, 0.5f, 0.55f);
+                case ItemType.EnumCycle:
+                    return cur ? Color.white : new Color(0.6f, 0.8f, 1f);
+                default:
+                    return Color.gray;
+            }
+        }
+
+        // ═══════════════════════════════════════════
+        //  Item Builders
+        // ═══════════════════════════════════════════
+
+        private static void AddToggle(string label, bool value, Action<bool> onChange)
+        {
+            _items.Add(new MenuItem { Type = ItemType.Toggle, Label = label, BoolValue = value, OnBoolChanged = onChange });
+        }
+
+        private static void AddSlider(string label, float value, float min, float max, float step, Action<float> onChange, string fmt = "F1")
+        {
+            _items.Add(new MenuItem { Type = ItemType.Slider, Label = label, FloatValue = value, Min = min, Max = max, Step = step, OnFloatChanged = onChange, FloatFmt = fmt });
+        }
+
+        private static void AddButton(string label, Action onClick)
+        {
+            _items.Add(new MenuItem { Type = ItemType.Button, Label = label, OnClick = onClick });
+        }
+
+        private static void AddLabel(string label)
+        {
+            _items.Add(new MenuItem { Type = ItemType.Label, Label = label });
+        }
+
+        private static void AddEnum(string label, string[] names, int index, Action<int> onChange)
+        {
+            _items.Add(new MenuItem { Type = ItemType.EnumCycle, Label = label, EnumNames = names, EnumIndex = index, OnEnumChanged = onChange });
+        }
+
+        // ═══════════════════════════════════════════
+        //  Section Helper
+        // ═══════════════════════════════════════════
+
+        private static void Sec(string label, ref bool expanded, Action contents)
+        {
+            bool exp = expanded;
+            int idx = _items.Count;
+            _items.Add(new MenuItem { Type = ItemType.Header, Label = label, Expanded = exp });
+            if (exp) contents();
+            var p = _items[idx];
+            p.OnExpandChanged = (v) => FlipSection(label, v);
+            _items[idx] = p;
+        }
+
+        // ═══════════════════════════════════════════
+        //  Page Builders
+        // ═══════════════════════════════════════════
+
+        private static void BuildPlayerPage()
+        {
+            Sec("God Mode", ref _pGodMode, () =>
+            {
+                AddToggle("God Mode", GodModeController.IsGodModeEnabled, v => GodModeController.IsGodModeEnabled = v);
+            });
+            Sec("Dash", ref _pDash, () =>
+            {
+                AddToggle("Enabled", DashController.IsDashEnabled, v => DashController.IsDashEnabled = v);
+                AddSlider("Dash Force", DashController.DashForce, 0f, 500f, 5f, v => DashController.DashForce = v, "F0");
+                AddToggle("Instantaneous", DashController.IsDashInstantaneous, v => DashController.IsDashInstantaneous = v);
+                AddToggle("Continuous", DashController.IsDashContinuous, v => DashController.IsDashContinuous = v);
+                AddToggle("Hand Oriented", DashController.IsHandOriented, v => DashController.IsHandOriented = v);
+                AddToggle("Use Left Hand", DashController.UseLeftHand, v => DashController.UseLeftHand = v);
+                AddToggle("Lock-On", DashController.LockOnEnabled, v => DashController.LockOnEnabled = v);
+                AddToggle("Kill Velocity On Land", DashController.KillVelocityOnLand, v => DashController.KillVelocityOnLand = v);
+            });
+            Sec("Flight", ref _pFlight, () =>
+            {
+                AddToggle("Enabled", FlightController.Enabled, v => FlightController.Enabled = v);
+                AddSlider("Speed Multiplier", FlightController.SpeedMultiplier, 0.5f, 20f, 0.5f, v => FlightController.SpeedMultiplier = v, "F1");
+                AddToggle("Acceleration", FlightController.AccelerationEnabled, v => FlightController.AccelerationEnabled = v);
+                AddSlider("Accel Rate", FlightController.AccelerationRate, 0.1f, 10f, 0.1f, v => FlightController.AccelerationRate = v, "F1");
+                AddToggle("Momentum", FlightController.MomentumEnabled, v => FlightController.MomentumEnabled = v);
+                AddToggle("Lock-On", FlightController.LockOnEnabled, v => FlightController.LockOnEnabled = v);
+            });
+            Sec("Ragdoll", ref _pRagdoll, () =>
+            {
+                AddToggle("Enabled", RagdollController.Enabled, v => RagdollController.Enabled = v);
+                AddEnum("Mode", Enum.GetNames(typeof(RagdollMode)), (int)RagdollController.Mode, v => RagdollController.Mode = (RagdollMode)v);
+                AddToggle("Grab Ragdoll", RagdollController.GrabEnabled, v => RagdollController.GrabEnabled = v);
+                AddToggle("Tantrum Mode", RagdollController.TantrumMode, v => RagdollController.TantrumMode = v);
+                AddEnum("Keybind", Enum.GetNames(typeof(RagdollBinding)), (int)RagdollController.Binding, v => RagdollController.Binding = (RagdollBinding)v);
+                AddButton("Unragdoll Now", () => { try { RagdollController.UnragdollPlayer(Player.PhysicsRig); } catch { } });
+            });
+            Sec("Bunny Hop", ref _pBunnyHop, () =>
+            {
+                AddToggle("Enabled", BunnyHopController.Enabled, v => BunnyHopController.Enabled = v);
+                AddSlider("Hop Boost", BunnyHopController.HopBoost, 0f, 20f, 0.5f, v => BunnyHopController.HopBoost = v, "F1");
+                AddSlider("Max Speed", BunnyHopController.MaxSpeed, 5f, 200f, 5f, v => BunnyHopController.MaxSpeed = v, "F0");
+                AddSlider("Air Strafe Force", BunnyHopController.AirStrafeForce, 0f, 50f, 1f, v => BunnyHopController.AirStrafeForce = v, "F1");
+                AddSlider("Jump Force", BunnyHopController.JumpForce, 1f, 20f, 0.5f, v => BunnyHopController.JumpForce = v, "F1");
+                AddToggle("Auto Hop", BunnyHopController.AutoHop, v => BunnyHopController.AutoHop = v);
+                AddToggle("Auto Jump Toggle", BunnyHopController.AutoJumpToggle, v => BunnyHopController.AutoJumpToggle = v);
+                AddToggle("Trimping", BunnyHopController.TrimpEnabled, v => BunnyHopController.TrimpEnabled = v);
+                AddSlider("Trimp Multiplier", BunnyHopController.TrimpMultiplier, 0f, 3f, 0.1f, v => BunnyHopController.TrimpMultiplier = v, "F2");
+            });
+            Sec("Spinbot", ref _pSpinbot, () =>
+            {
+                AddToggle("Enabled", SpinbotController.Enabled, v => SpinbotController.Enabled = v);
+                AddSlider("Speed (deg/s)", SpinbotController.Speed, 10f, 7200f, 90f, v => SpinbotController.Speed = v, "F0");
+                AddEnum("Direction", Enum.GetNames(typeof(SpinDirection)), (int)SpinbotController.Direction, v => SpinbotController.Direction = (SpinDirection)v);
+            });
+            Sec("Anti-Constraint", ref _pAntiConstraint, () =>
+            {
+                AddToggle("Enabled", AntiConstraintController.IsEnabled, v => AntiConstraintController.IsEnabled = v);
+                AddButton("Clear Constraints", () => AntiConstraintController.ClearConstraints());
+            });
+            Sec("Anti-Knockout", ref _pAntiKnockout, () =>
+            {
+                AddToggle("Enabled", AntiKnockoutController.IsEnabled, v => AntiKnockoutController.IsEnabled = v);
+            });
+            Sec("Unbreakable Grip", ref _pUnbreakGrip, () =>
+            {
+                AddToggle("Enabled", UnbreakableGripController.IsEnabled, v => UnbreakableGripController.IsEnabled = v);
+            });
+            Sec("Force Grab", ref _pForceGrab, () =>
+            {
+                AddToggle("Enabled", ForceGrabController.IsEnabled, v => ForceGrabController.IsEnabled = v);
+                AddToggle("Instant Mode", ForceGrabController.InstantMode, v => ForceGrabController.InstantMode = v);
+                AddToggle("Global Mode", ForceGrabController.GlobalMode, v => ForceGrabController.GlobalMode = v);
+                AddSlider("Fly Speed", ForceGrabController.FlySpeed, 5f, 200f, 5f, v => ForceGrabController.FlySpeed = v, "F0");
+                AddToggle("Grip Only", ForceGrabController.GripOnly, v => ForceGrabController.GripOnly = v);
+                AddToggle("Force Push", ForceGrabController.ForcePush, v => ForceGrabController.ForcePush = v);
+                AddSlider("Push Force", ForceGrabController.PushForce, 5f, 500f, 5f, v => ForceGrabController.PushForce = v, "F0");
+                AddButton("Clear Selected", () => ForceGrabController.ClearSelected());
+            });
+            Sec("Earth Loop (Lock Gravity)", ref _pAntiGravChange, () =>
+            {
+                AddToggle("Enabled", AntiGravityChangeController.Enabled, v => AntiGravityChangeController.Enabled = v);
+            });
+            Sec("Auto Run", ref _pAutoRun, () =>
+            {
+                AddToggle("Enabled", AutoRunController.Enabled, v => AutoRunController.Enabled = v);
+            });
+            Sec("Ghost Mode", ref _pGhostMode, () =>
+            {
+                AddToggle("Enabled", GhostModeController.Enabled, v => GhostModeController.Enabled = v);
+            });
+            Sec("Anti-Ragdoll", ref _pAntiRagdoll, () =>
+            {
+                AddToggle("Enabled", AntiRagdollController.Enabled, v => AntiRagdollController.Enabled = v);
+            });
+            Sec("Anti-Slowmo", ref _pAntiSlowmo, () =>
+            {
+                AddToggle("Enabled", AntiSlowmoController.Enabled, v => AntiSlowmoController.Enabled = v);
+            });
+            Sec("Anti-Teleport", ref _pAntiTeleport, () =>
+            {
+                AddToggle("Enabled", AntiTeleportController.Enabled, v => AntiTeleportController.Enabled = v);
+            });
+        }
+
+        private static void BuildCombatPage()
+        {
+            Sec("Explosive Punch", ref _cExpPunch, () =>
+            {
+                AddToggle("Explosive Punch", ExplosivePunchController.IsExplosivePunchEnabled, v => ExplosivePunchController.IsExplosivePunchEnabled = v);
+                AddToggle("Super Explosive", ExplosivePunchController.IsSuperExplosivePunchEnabled, v => ExplosivePunchController.IsSuperExplosivePunchEnabled = v);
+                AddToggle("BLACKFLASH", ExplosivePunchController.IsBlackFlashEnabled, v => ExplosivePunchController.IsBlackFlashEnabled = v);
+                AddToggle("Tiny Explosive", ExplosivePunchController.IsTinyExplosiveEnabled, v => ExplosivePunchController.IsTinyExplosiveEnabled = v);
+                AddToggle("BOOM", ExplosivePunchController.IsBoomEnabled, v => ExplosivePunchController.IsBoomEnabled = v);
+                AddToggle("Legacy Punch", ExplosivePunchController.IsLegacyPunchEnabled, v => ExplosivePunchController.IsLegacyPunchEnabled = v);
+                AddSlider("Punch Speed", ExplosivePunchController.PunchVelocityThreshold, 1f, 15f, 0.5f, v => ExplosivePunchController.PunchVelocityThreshold = v, "F1");
+                AddSlider("Cooldown", ExplosivePunchController.PunchCooldown, 0.05f, 1f, 0.05f, v => ExplosivePunchController.PunchCooldown = v, "F2");
+            });
+            Sec("Ground Slam", ref _cGroundSlam, () =>
+            {
+                AddToggle("Enabled", GroundPoundController.Enabled, v => GroundPoundController.Enabled = v);
+                AddSlider("Velocity Threshold", GroundPoundController.VelocityThreshold, 1f, 50f, 1f, v => GroundPoundController.VelocityThreshold = v, "F1");
+                AddSlider("Cooldown", GroundPoundController.Cooldown, 0.05f, 5f, 0.05f, v => GroundPoundController.Cooldown = v, "F2");
+                AddEnum("Explosion Type", Enum.GetNames(typeof(ExplosionType)), (int)GroundPoundController.SelectedExplosion, v => GroundPoundController.SelectedExplosion = (ExplosionType)v);
+            });
+            Sec("Explosive Impact", ref _cExpImpact, () =>
+            {
+                AddToggle("Enabled", ExplosiveImpactController.Enabled, v => ExplosiveImpactController.Enabled = v);
+                AddSlider("Velocity Threshold", ExplosiveImpactController.VelocityThreshold, 1f, 50f, 1f, v => ExplosiveImpactController.VelocityThreshold = v, "F1");
+                AddSlider("Cooldown", ExplosiveImpactController.Cooldown, 0.05f, 5f, 0.05f, v => ExplosiveImpactController.Cooldown = v, "F2");
+                AddEnum("Explosion Type", Enum.GetNames(typeof(ExplosionType)), (int)ExplosiveImpactController.SelectedExplosion, v => ExplosiveImpactController.SelectedExplosion = (ExplosionType)v);
+            });
+            Sec("Random Explode", ref _cRandExplode, () =>
+            {
+                AddToggle("Enabled", RandomExplodeController.Enabled, v => RandomExplodeController.Enabled = v);
+                AddEnum("Explosion Type", Enum.GetNames(typeof(ExplosionType)), (int)RandomExplodeController.SelectedExplosion, v => RandomExplodeController.SelectedExplosion = (ExplosionType)v);
+                AddSlider("Interval (s)", RandomExplodeController.Interval, 0.1f, 60f, 0.5f, v => RandomExplodeController.Interval = v, "F1");
+                AddSlider("Launch Force", RandomExplodeController.LaunchForce, 0f, 1000f, 10f, v => RandomExplodeController.LaunchForce = v, "F0");
+                AddToggle("Ragdoll on Explode", RandomExplodeController.RagdollOnExplode, v => RandomExplodeController.RagdollOnExplode = v);
+                AddButton("Test Explosion Now", () => RandomExplodeController.TriggerExplosion());
+            });
+            Sec("Full Auto", ref _cFullAuto, () =>
+            {
+                AddToggle("Enabled", FullAutoController.IsFullAutoEnabled, v => FullAutoController.IsFullAutoEnabled = v);
+                AddSlider("Fire Rate Multiplier", FullAutoController.FireRateMultiplier, 1f, 1000f, 10f, v => FullAutoController.FireRateMultiplier = v, "F0");
+            });
+            Sec("Infinite Ammo", ref _cInfAmmo, () =>
+            {
+                AddToggle("Infinite Ammo", InfiniteAmmoController.IsEnabled, v => InfiniteAmmoController.IsEnabled = v);
+            });
+            Sec("Damage Multiplier", ref _cDamageMult, () =>
+            {
+                AddSlider("Gun Multiplier", DamageMultiplierController.GunMultiplier, 0.1f, 100f, 0.5f, v => DamageMultiplierController.GunMultiplier = v, "F1");
+                AddSlider("Melee Multiplier", DamageMultiplierController.MeleeMultiplier, 0.1f, 100f, 0.5f, v => DamageMultiplierController.MeleeMultiplier = v, "F1");
+                AddButton("Apply Now", () => DamageMultiplierController.ApplyMultipliersNow());
+                AddButton("Reset to 1x", () => { DamageMultiplierController.GunMultiplier = 1f; DamageMultiplierController.MeleeMultiplier = 1f; });
+            });
+            Sec("Chaos Gun", ref _cChaosGun, () =>
+            {
+                AddToggle("Glow Gun (Rainbow)", ChaosGunController.PurpleGuns, v => ChaosGunController.PurpleGuns = v);
+                AddToggle("Insane Damage", ChaosGunController.InsaneDamage, v => ChaosGunController.InsaneDamage = v);
+                AddToggle("No Recoil", ChaosGunController.NoRecoil, v => ChaosGunController.NoRecoil = v);
+                AddToggle("Insane Firerate", ChaosGunController.InsaneFirerate, v => ChaosGunController.InsaneFirerate = v);
+                AddToggle("No Weight", ChaosGunController.NoWeight, v => ChaosGunController.NoWeight = v);
+                AddToggle("Guns Bounce", ChaosGunController.GunsBounce, v => ChaosGunController.GunsBounce = v);
+                AddToggle("No Reload", ChaosGunController.NoReload, v => ChaosGunController.NoReload = v);
+            });
+        }
+
+        private static void BuildLauncherPage()
+        {
+            Sec("Object Launcher", ref _lMain, () =>
+            {
+                AddToggle("Enabled", ObjectLauncherController.IsLauncherEnabled, v => ObjectLauncherController.IsLauncherEnabled = v);
+                AddToggle("Safety (Grip+Trigger)", ObjectLauncherController.SafetyEnabled, v => ObjectLauncherController.SafetyEnabled = v);
+                AddToggle("Left Hand", ObjectLauncherController.UseLeftHand, v => ObjectLauncherController.UseLeftHand = v);
+                AddToggle("Full-Auto", ObjectLauncherController.IsFullAuto, v => ObjectLauncherController.IsFullAuto = v);
+                AddSlider("Full-Auto Delay", ObjectLauncherController.FullAutoDelay, 0.01f, 1f, 0.01f, v => ObjectLauncherController.FullAutoDelay = v, "F2");
+                AddToggle("Show Trajectory", ObjectLauncherController.ShowTrajectory, v => ObjectLauncherController.ShowTrajectory = v);
+                AddSlider("Launch Force", ObjectLauncherController.LaunchForce, 0f, 10000f, 50f, v => ObjectLauncherController.LaunchForce = v, "F0");
+                AddSlider("Spawn Distance", ObjectLauncherController.SpawnDistance, 0.5f, 10f, 0.1f, v => ObjectLauncherController.SpawnDistance = v, "F1");
+                AddSlider("Projectile Count", ObjectLauncherController.ProjectileCount, 1f, 25f, 1f, v => ObjectLauncherController.ProjectileCount = (int)v, "F0");
+                AddSlider("Spawn Scale", ObjectLauncherController.SpawnScale, 0.1f, 10f, 0.1f, v => ObjectLauncherController.SpawnScale = v, "F1");
+                AddToggle("Homing", ObjectLauncherController.HomingEnabled, v => ObjectLauncherController.HomingEnabled = v);
+                AddSlider("Homing Strength", ObjectLauncherController.HomingStrength, 0.5f, 50f, 0.5f, v => ObjectLauncherController.HomingStrength = v, "F1");
+                AddSlider("Homing Speed", ObjectLauncherController.HomingSpeed, 0f, 500f, 5f, v => ObjectLauncherController.HomingSpeed = v, "F0");
+                AddButton("Launch Object", () => ObjectLauncherController.LaunchObject());
+                AddButton("Despawn Launched", () => ObjectLauncherController.DespawnLaunchedObjects());
+                AddLabel("Current: " + (ObjectLauncherController.CurrentItemName ?? "None"));
+            });
+        }
+
+        private static void BuildCosmeticsPage()
+        {
+            Sec("Weeping Angel", ref _cosWeepingAngel, () =>
+            {
+                AddToggle("Enabled", WeepingAngelController.Enabled, v => WeepingAngelController.Enabled = v);
+                AddToggle("Target Everyone", WeepingAngelController.TargetEveryone, v => WeepingAngelController.TargetEveryone = v);
+                AddSlider("View Angle", WeepingAngelController.ViewAngle, 10f, 180f, 5f, v => WeepingAngelController.ViewAngle = v, "F0");
+                AddSlider("View Distance", WeepingAngelController.ViewDistance, 5f, 500f, 10f, v => WeepingAngelController.ViewDistance = v, "F0");
+            });
+            Sec("Avatar Copier", ref _cosAvatarCopier, () =>
+            {
+                AddToggle("Copy Nickname", AvatarCopierController.CopyNickname, v => AvatarCopierController.CopyNickname = v);
+                AddToggle("Copy Description", AvatarCopierController.CopyDescription, v => AvatarCopierController.CopyDescription = v);
+                AddToggle("Copy Cosmetics", AvatarCopierController.CopyCosmetics, v => AvatarCopierController.CopyCosmetics = v);
+                AddButton("Refresh Players", () => AvatarCopierController.RefreshPlayerList());
+                if (AvatarCopierController.HasRevertState)
+                    AddButton("Revert Avatar", () => AvatarCopierController.RevertAvatar());
+            });
+            Sec("Body Log Color", ref _cosBodyLogColor, () =>
+            {
+                AddToggle("Enabled", BodyLogColorController.Enabled, v => BodyLogColorController.Enabled = v);
+                AddButton("Apply All Colors", () => BodyLogColorController.ApplyAll());
+            });
+        }
+
+        private static void BuildUtilityPage()
+        {
+            Sec("Despawn All", ref _uDespawn, () =>
+            {
+                AddButton("Despawn Now", () => DespawnAllController.DespawnAll());
+                AddEnum("Filter", Enum.GetNames(typeof(DespawnFilter)), (int)DespawnAllController.Filter, v => DespawnAllController.Filter = (DespawnFilter)v);
+                AddToggle("Keep Holstered Items", DespawnAllController.KeepHolsteredItems, v => DespawnAllController.KeepHolsteredItems = v);
+                AddToggle("Auto Despawn", DespawnAllController.AutoDespawnEnabled, v => DespawnAllController.AutoDespawnEnabled = v);
+                AddSlider("Auto Interval (min)", DespawnAllController.AutoDespawnIntervalMins, 0.5f, 30f, 0.5f, v => DespawnAllController.AutoDespawnIntervalMins = v, "F1");
+                AddToggle("Despawn on Disconnect", DespawnAllController.DespawnOnDisconnect, v => DespawnAllController.DespawnOnDisconnect = v);
+            });
+            Sec("Spawn Limiter", ref _uSpawnLimiter, () =>
+            {
+                AddToggle("Enabled", SpawnLimiterController.Enabled, v => SpawnLimiterController.Enabled = v);
+                AddToggle("Host Only", SpawnLimiterController.HostOnly, v => SpawnLimiterController.HostOnly = v);
+                AddSlider("Spawn Delay (s)", SpawnLimiterController.SpawnDelay, 0.05f, 5f, 0.05f, v => SpawnLimiterController.SpawnDelay = v, "F2");
+                AddSlider("Max Per Frame", SpawnLimiterController.MaxPerFrame, 1f, 50f, 1f, v => SpawnLimiterController.MaxPerFrame = (int)v, "F0");
+            });
+            Sec("Anti-Despawn", ref _uAntiDespawn, () =>
+            {
+                AddToggle("Enabled", AntiDespawnController.Enabled, v => AntiDespawnController.Enabled = v);
+            });
+            Sec("Force Spawner", ref _uForceSpawner, () =>
+            {
+                AddToggle("Enabled", ForceSpawnerController.Enabled, v => ForceSpawnerController.Enabled = v);
+                AddToggle("Unredact All", ForceSpawnerController.UnredactAll, v => ForceSpawnerController.UnredactAll = v);
+                AddSlider("Distance", ForceSpawnerController.Distance, 1f, 50f, 1f, v => ForceSpawnerController.Distance = (int)v, "F0");
+            });
+            Sec("Teleport", ref _uTeleport, () =>
+            {
+                AddLabel(TeleportController.HasSavedPosition ? "Saved: " + TeleportController.SavedPositionText : "No saved position");
+                AddButton("Save Position", () => TeleportController.SaveCurrentPosition());
+                AddButton("Teleport to Saved", () => TeleportController.TeleportToSavedPosition());
+                AddButton("Clear Saved", () => TeleportController.ClearSavedPosition());
+            });
+            Sec("Waypoints", ref _uWaypoints, () =>
+            {
+                AddLabel("Waypoints: " + WaypointController.WaypointCount);
+                AddSlider("Teleport Hold Time", WaypointController.TeleportHoldTime, 0.5f, 5f, 0.1f, v => WaypointController.TeleportHoldTime = v, "F1");
+                AddButton("Create Waypoint", () => WaypointController.CreateWaypoint());
+                AddButton("Clear All Waypoints", () => WaypointController.ClearAllWaypoints());
+            });
+            Sec("Map Change", ref _uMapChange, () =>
+            {
+                AddButton("Reload Current Level", () => MapChangeController.ReloadLevel());
+            });
+            Sec("Notifications", ref _uNotifications, () =>
+            {
+                AddToggle("Notifications Enabled", NotificationHelper.NotificationsEnabled, v => NotificationHelper.NotificationsEnabled = v);
+            });
+            Sec("XYZ Scale", ref _uXyzScale, () =>
+            {
+                AddToggle("Enabled", XYZScaleController.Enabled, v => XYZScaleController.Enabled = v);
+                AddSlider("Scale X", XYZScaleController.ScaleX, 0.1f, 10f, 0.1f, v => XYZScaleController.ScaleX = v, "F1");
+                AddSlider("Scale Y", XYZScaleController.ScaleY, 0.1f, 10f, 0.1f, v => XYZScaleController.ScaleY = v, "F1");
+                AddSlider("Scale Z", XYZScaleController.ScaleZ, 0.1f, 10f, 0.1f, v => XYZScaleController.ScaleZ = v, "F1");
+                AddButton("Apply Scale", () => XYZScaleController.ApplyScale());
+            });
+            Sec("Disable Avatar FX", ref _uAvatarFx, () =>
+            {
+                AddToggle("Disable Switch Effects", DisableAvatarFXController.Enabled, v => DisableAvatarFXController.Enabled = v);
+            });
+            Sec("Holster Hider", ref _uHolsterHider, () =>
+            {
+                AddToggle("Hide Holsters", HolsterHiderController.HideHolsters, v => HolsterHiderController.HideHolsters = v);
+                AddToggle("Hide Ammo Pouches", HolsterHiderController.HideAmmoPouch, v => HolsterHiderController.HideAmmoPouch = v);
+                AddToggle("Hide Body Log", HolsterHiderController.HideBodyLog, v => HolsterHiderController.HideBodyLog = v);
+                AddButton("Apply Now", () => HolsterHiderController.Apply());
+            });
+        }
+
+        private static void BuildNetworkPage()
+        {
+            Sec("Auto Host", ref _nAutoHost, () =>
+            {
+                AddToggle("Friends-Only on Launch", AutoHostController.Enabled, v => AutoHostController.Enabled = v);
+            });
+            Sec("Server Queue", ref _nServerQueue, () =>
+            {
+                AddToggle("Enabled", ServerQueueController.Enabled, v => ServerQueueController.Enabled = v);
+                AddSlider("Poll Interval (s)", ServerQueueController.PollInterval, 5f, 60f, 1f, v => ServerQueueController.PollInterval = v, "F0");
+                AddLabel(ServerQueueController.StatusText ?? "");
+                if (ServerQueueController.IsInQueue)
+                    AddButton("Stop Queue", () => ServerQueueController.StopQueue());
+            });
+            Sec("Freeze Player", ref _nFreezePlayer, () =>
+            {
+                AddButton("Refresh Players", () => FreezePlayerController.RefreshPlayers());
+                AddButton("Unfreeze All", () => FreezePlayerController.UnfreezeAll());
+            });
+            Sec("Block System", ref _nBlockSystem, () =>
+            {
+                AddToggle("Player Block", BlockController.PlayerBlockEnabled, v => BlockController.PlayerBlockEnabled = v);
+                AddToggle("Item Block", BlockController.ItemBlockEnabled, v => BlockController.ItemBlockEnabled = v);
+                AddToggle("Local Block", BlockController.LocalBlockEnabled, v => BlockController.LocalBlockEnabled = v);
+                AddButton("Despawn Held Item", () => BlockController.DespawnHeldItem());
+                AddButton("Fix Wobbly Avatar", () => BlockController.FixWobblyAvatar());
+            });
+            Sec("Screen Share", ref _nScreenShare, () =>
+            {
+                AddToggle("Enabled", ScreenShareController.Enabled, v => ScreenShareController.SetEnabled(v));
+                AddToggle("Preview Visible", ScreenShareController.PreviewVisible, v => ScreenShareController.SetPreviewVisible(v));
+                AddButton("Reposition", () => ScreenShareController.Reposition());
+            });
+            Sec("Player Info", ref _nPlayerInfo, () =>
+            {
+                AddButton("Refresh Player List", () => PlayerInfoController.ForceRefresh());
+            });
+        }
+
+        private static void BuildAvatarPage()
+        {
+            AddLabel("Avatar search: use full Overlay Menu (keyboard)");
+            AddLabel("Or use BoneMenu for VR avatar browsing");
+        }
+
+        private static void BuildSettingsPage()
+        {
+            AddLabel("VR Wrist Menu Settings");
+            AddToggle("Notifications", NotificationHelper.NotificationsEnabled, v => NotificationHelper.NotificationsEnabled = v);
+            AddButton("Save Settings Now", () => SettingsManager.ForceSave());
+        }
+
+        // ═══════════════════════════════════════════
+        //  FlipSection
+        // ═══════════════════════════════════════════
+
+        private static void FlipSection(string label, bool value)
+        {
+            if (label == "God Mode") _pGodMode = value;
+            else if (label == "Dash") _pDash = value;
+            else if (label == "Flight") _pFlight = value;
+            else if (label == "Ragdoll") _pRagdoll = value;
+            else if (label == "Bunny Hop") _pBunnyHop = value;
+            else if (label == "Anti-Constraint") _pAntiConstraint = value;
+            else if (label == "Anti-Knockout") _pAntiKnockout = value;
+            else if (label == "Unbreakable Grip") _pUnbreakGrip = value;
+            else if (label == "Force Grab") _pForceGrab = value;
+            else if (label == "Earth Loop (Lock Gravity)") _pAntiGravChange = value;
+            else if (label == "Auto Run") _pAutoRun = value;
+            else if (label == "Ghost Mode") _pGhostMode = value;
+            else if (label == "Anti-Ragdoll") _pAntiRagdoll = value;
+            else if (label == "Anti-Slowmo") _pAntiSlowmo = value;
+            else if (label == "Anti-Teleport") _pAntiTeleport = value;
+            else if (label == "Spinbot") _pSpinbot = value;
+            else if (label == "Explosive Punch") _cExpPunch = value;
+            else if (label == "Ground Slam") _cGroundSlam = value;
+            else if (label == "Explosive Impact") _cExpImpact = value;
+            else if (label == "Random Explode") _cRandExplode = value;
+            else if (label == "Full Auto") _cFullAuto = value;
+            else if (label == "Infinite Ammo") _cInfAmmo = value;
+            else if (label == "Damage Multiplier") _cDamageMult = value;
+            else if (label == "Chaos Gun") _cChaosGun = value;
+            else if (label == "Object Launcher") _lMain = value;
+            else if (label == "Weeping Angel") _cosWeepingAngel = value;
+            else if (label == "Avatar Copier") _cosAvatarCopier = value;
+            else if (label == "Body Log Color") _cosBodyLogColor = value;
+            else if (label == "Despawn All") _uDespawn = value;
+            else if (label == "Spawn Limiter") _uSpawnLimiter = value;
+            else if (label == "Anti-Despawn") _uAntiDespawn = value;
+            else if (label == "Force Spawner") _uForceSpawner = value;
+            else if (label == "Teleport") _uTeleport = value;
+            else if (label == "Waypoints") _uWaypoints = value;
+            else if (label == "Map Change") _uMapChange = value;
+            else if (label == "Notifications") _uNotifications = value;
+            else if (label == "XYZ Scale") _uXyzScale = value;
+            else if (label == "Disable Avatar FX") _uAvatarFx = value;
+            else if (label == "Holster Hider") _uHolsterHider = value;
+            else if (label == "Auto Host") _nAutoHost = value;
+            else if (label == "Server Queue") _nServerQueue = value;
+            else if (label == "Freeze Player") _nFreezePlayer = value;
+            else if (label == "Block System") _nBlockSystem = value;
+            else if (label == "Screen Share") _nScreenShare = value;
+            else if (label == "Player Info") _nPlayerInfo = value;
+        }
+    }
+}

@@ -3,6 +3,8 @@ using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Reflection;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using MelonLoader;
@@ -12,30 +14,23 @@ namespace BonelabUtilityUpdater
     internal static class AutoUpdater
     {
         private const string MOD_DLL_NAME = "BonelabUtilityMod.dll";
-        private const byte XOR_KEY = 0xC7;
 
         // ══════════════════════════════════════════════════════════════════
-        //  CONFIGURATION — XOR-encoded GitHub owner and repo name.
-        //  These byte arrays decode to your GitHub username and repo name
-        //  at runtime. The plaintext never appears in the compiled DLL.
-        //
-        //  HOW TO SET UP:
-        //  1) In UpdaterPlugin.cs, uncomment the LogEncodedStrings line
-        //  2) Fill in your real GitHub username and repo name
-        //  3) Build & run the game once — check MelonLoader console log
-        //  4) Copy the logged byte arrays and paste them below
-        //  5) Re-comment the LogEncodedStrings line in UpdaterPlugin.cs
-        //  6) Rebuild
+        //  CONFIGURATION — AES-256-CBC encrypted GitHub owner and repo name.
+        //  These byte arrays are decrypted at runtime.
+        //  The plaintext never appears in the compiled DLL.
         // ══════════════════════════════════════════════════════════════════
-        private static readonly byte[] _encodedOwner = { 0x8B, 0xA7, 0xB7, 0xA3, 0xA6, 0xB6, 0xA0, 0xA3, 0xBB };
-        private static readonly byte[] _encodedRepo = { 0xA8, 0xB1, 0xAA };
+        private static readonly byte[] _aesKey = { 0xC7, 0x69, 0x1B, 0x1D, 0xCD, 0x71, 0x90, 0x62, 0xC3, 0xA4, 0x2F, 0xEE, 0x4F, 0x06, 0x02, 0x54, 0x2E, 0xE6, 0x5E, 0xC2, 0x89, 0x25, 0x8F, 0x36, 0xEB, 0x84, 0x2D, 0xE5, 0xA8, 0x9F, 0x31, 0xD1 };
+        private static readonly byte[] _aesIv = { 0xB8, 0x46, 0xD2, 0x69, 0xB7, 0x08, 0x10, 0x44, 0x16, 0xD5, 0xDA, 0x0C, 0x81, 0x58, 0x09, 0x4E };
+        private static readonly byte[] _encOwner = { 0x5B, 0x7E, 0x8A, 0x36, 0x02, 0xD9, 0x31, 0xA0, 0x05, 0x9A, 0x81, 0x97, 0x68, 0x5C, 0xBF, 0x0B };
+        private static readonly byte[] _encRepo = { 0x18, 0xBC, 0x4A, 0x01, 0x44, 0xD9, 0x0A, 0x8B, 0x05, 0x40, 0x03, 0xDD, 0xA4, 0x90, 0x0F, 0x99 };
 
         private static readonly HttpClient _http = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
 
         public static void CheckAndUpdate(MelonLogger.Instance logger)
         {
-            string owner = Decode(_encodedOwner);
-            string repo = Decode(_encodedRepo);
+            string owner = DecryptAes(_encOwner);
+            string repo = DecryptAes(_encRepo);
 
             if (owner == "CHANGE_ME" || repo == "CHANGE_ME")
             {
@@ -138,38 +133,20 @@ namespace BonelabUtilityUpdater
         //  XOR encoding / decoding
         // ═══════════════════════════════════════════════════════
 
-        private static string Decode(byte[] data)
-        {
-            char[] c = new char[data.Length];
-            for (int i = 0; i < data.Length; i++)
-                c[i] = (char)(data[i] ^ XOR_KEY ^ (byte)(i & 0x1F));
-            return new string(c);
-        }
+        // ═══════════════════════════════════════════════════════
+        //  AES-256-CBC decryption
+        // ═══════════════════════════════════════════════════════
 
-        private static byte[] Encode(string text)
+        private static string DecryptAes(byte[] cipher)
         {
-            byte[] result = new byte[text.Length];
-            for (int i = 0; i < text.Length; i++)
-                result[i] = (byte)((byte)text[i] ^ XOR_KEY ^ (byte)(i & 0x1F));
-            return result;
-        }
-
-        /// <summary>
-        /// Call this once from UpdaterPlugin.OnPreInitialization to generate
-        /// the encoded byte arrays for your GitHub owner and repo name.
-        /// Check the MelonLoader console log for the output.
-        /// </summary>
-        public static void LogEncodedStrings(string owner, string repo, MelonLogger.Instance logger)
-        {
-            logger.Msg("═══ Copy these into AutoUpdater.cs ═══");
-            logger.Msg($"_encodedOwner = {FormatByteArray(Encode(owner))};");
-            logger.Msg($"_encodedRepo  = {FormatByteArray(Encode(repo))};");
-            logger.Msg("═══════════════════════════════════════");
-        }
-
-        private static string FormatByteArray(byte[] bytes)
-        {
-            return "{ " + string.Join(", ", bytes.Select(b => $"0x{b:X2}")) + " }";
+            using var aes = Aes.Create();
+            aes.Key = _aesKey;
+            aes.IV = _aesIv;
+            aes.Mode = CipherMode.CBC;
+            aes.Padding = PaddingMode.PKCS7;
+            using var dec = aes.CreateDecryptor();
+            byte[] plain = dec.TransformFinalBlock(cipher, 0, cipher.Length);
+            return Encoding.UTF8.GetString(plain);
         }
 
         // ═══════════════════════════════════════════════════════
