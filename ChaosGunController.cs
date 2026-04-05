@@ -46,27 +46,102 @@ namespace BonelabUtilityMod
 
         // ── Shader Library ──
         public static bool ShaderLibraryEnabled = false;
+        public static bool AutoApplyShader = false;
         public static int SelectedShaderIndex = 0;
         private static List<Shader> _availableShaders = new List<Shader>();
         private static List<string> _shaderNames = new List<string>();
         private static Dictionary<int, Shader> _origShaders = new Dictionary<int, Shader>();
         private static bool _shadersDirty = true;
+        private static int _lastLeftGunId = 0;
+        private static int _lastRightGunId = 0;
+
+        // ── Shader Search ──
+        public static string ShaderSearchQuery = "";
+        private static List<int> _filteredIndices = new List<int>();
+        private static int _filteredCursor = 0;
+        private static string _lastSearchQuery = null;
+
+        // ── Shader Favorites ──
+        private static List<string> _favoriteShaderNames = new List<string>();
+        public static bool ShowFavoritesOnly = false;
+        public static int FavoriteCount => _favoriteShaderNames.Count;
+        public static List<string> FavoriteShaderNames => _favoriteShaderNames;
 
         public static string SelectedShaderName => _shaderNames.Count > 0 && SelectedShaderIndex >= 0 && SelectedShaderIndex < _shaderNames.Count
             ? _shaderNames[SelectedShaderIndex] : "None";
         public static int ShaderCount => _shaderNames.Count;
         public static List<string> ShaderNames => _shaderNames;
 
+        public static bool IsCurrentShaderFavorited()
+        {
+            if (SelectedShaderIndex < 0 || SelectedShaderIndex >= _shaderNames.Count) return false;
+            return _favoriteShaderNames.Contains(_shaderNames[SelectedShaderIndex]);
+        }
+
+        public static void ToggleFavoriteCurrent()
+        {
+            if (SelectedShaderIndex < 0 || SelectedShaderIndex >= _shaderNames.Count) return;
+            string name = _shaderNames[SelectedShaderIndex];
+            if (_favoriteShaderNames.Contains(name))
+                _favoriteShaderNames.Remove(name);
+            else
+                _favoriteShaderNames.Add(name);
+            _lastSearchQuery = null; // force re-filter
+        }
+
+        public static void SetFavorites(List<string> favorites)
+        {
+            _favoriteShaderNames = favorites ?? new List<string>();
+            _lastSearchQuery = null;
+        }
+
+        public static int FilteredCount => _filteredIndices.Count;
+        public static int FilteredCursor => _filteredCursor;
+
+        public static string FilteredShaderName
+        {
+            get
+            {
+                RebuildFilterIfNeeded();
+                if (_filteredIndices.Count == 0) return "None";
+                int realIdx = _filteredIndices[_filteredCursor];
+                return _shaderNames[realIdx];
+            }
+        }
+
+        public static void RebuildFilterIfNeeded()
+        {
+            string q = (ShaderSearchQuery ?? "").Trim().ToLower();
+            bool favOnly = ShowFavoritesOnly;
+            // Rebuild if query or fav-mode changed
+            if (q == (_lastSearchQuery ?? "\x01") && !_shadersDirty) return;
+            _lastSearchQuery = q;
+
+            _filteredIndices.Clear();
+            for (int i = 0; i < _shaderNames.Count; i++)
+            {
+                if (favOnly && !_favoriteShaderNames.Contains(_shaderNames[i])) continue;
+                if (q.Length > 0 && !_shaderNames[i].ToLower().Contains(q)) continue;
+                _filteredIndices.Add(i);
+            }
+            if (_filteredCursor >= _filteredIndices.Count)
+                _filteredCursor = _filteredIndices.Count > 0 ? 0 : 0;
+        }
+
         public static void NextShader()
         {
-            if (_shaderNames.Count == 0) return;
-            SelectedShaderIndex = (SelectedShaderIndex + 1) % _shaderNames.Count;
+            RebuildFilterIfNeeded();
+            if (_filteredIndices.Count == 0) return;
+            _filteredCursor = (_filteredCursor + 1) % _filteredIndices.Count;
+            SelectedShaderIndex = _filteredIndices[_filteredCursor];
         }
 
         public static void PrevShader()
         {
-            if (_shaderNames.Count == 0) return;
-            SelectedShaderIndex = (SelectedShaderIndex - 1 + _shaderNames.Count) % _shaderNames.Count;
+            RebuildFilterIfNeeded();
+            if (_filteredIndices.Count == 0) return;
+            _filteredCursor = (_filteredCursor - 1 + _filteredIndices.Count) % _filteredIndices.Count;
+            SelectedShaderIndex = _filteredIndices[_filteredCursor];
         }
 
         public static void RefreshShaderList()
@@ -96,6 +171,7 @@ namespace BonelabUtilityMod
             }
             catch { }
             _shadersDirty = false;
+            _lastSearchQuery = null; // force re-filter
             if (SelectedShaderIndex >= _shaderNames.Count)
                 SelectedShaderIndex = 0;
         }
@@ -117,21 +193,48 @@ namespace BonelabUtilityMod
             if (hand == null) return;
             Gun gun = Player.GetComponentInHand<Gun>(hand);
             if (gun == null) return;
-            foreach (Renderer r in ((Component)gun).GetComponentsInChildren<Renderer>())
+            ApplyShaderToRenderers(((Component)gun).GetComponentsInChildren<Renderer>(), shader);
+        }
+
+        private static void ApplyShaderToRenderers(Il2CppArrayBase<Renderer> renderers, Shader shader)
+        {
+            foreach (Renderer r in renderers)
             {
                 if (r is ParticleSystemRenderer || r is TrailRenderer) continue;
-                foreach (Material mat in (Il2CppArrayBase<Material>)(object)r.materials)
+                // Skip grip highlight gizmos (the faint white circles on grab points)
+                string goName = r.gameObject.name.ToLower();
+                if (goName.Contains("grip") || goName.Contains("gizmo") || goName.Contains("grab") ||
+                    goName.Contains("highlight") || goName.Contains("forcepull")) continue;
+                foreach (Material mat in (Il2CppArrayBase<Material>)(object)r.sharedMaterials)
                 {
+                    if (mat == null) continue;
                     string sn = mat.shader != null ? mat.shader.name : "";
                     if (sn.Contains("Scope") || sn.Contains("Lens") || sn.Contains("Reticle") ||
                         sn.Contains("Holographic") || sn.Contains("Stencil")) continue;
+                    // Skip grip/gizmo materials by name
                     string mn = mat.name.ToLower();
                     if (mn.Contains("lens") || mn.Contains("reticle") || mn.Contains("scope_glass")) continue;
+                    if (mn.Contains("grip") || mn.Contains("gizmo") || mn.Contains("highlight") ||
+                        mn.Contains("forcepull") || mn.Contains("grab_point")) continue;
                     int id = ((Object)mat).GetInstanceID();
                     if (!_origShaders.ContainsKey(id))
                         _origShaders[id] = mat.shader;
                     mat.shader = shader;
                 }
+            }
+        }
+
+        private static void AutoApplyShaderToHand(Hand hand, ref int lastGunId)
+        {
+            if (hand == null) { lastGunId = 0; return; }
+            Gun gun = Player.GetComponentInHand<Gun>(hand);
+            if (gun == null) { lastGunId = 0; return; }
+            int gunId = ((Object)gun).GetInstanceID();
+            if (gunId != lastGunId)
+            {
+                lastGunId = gunId;
+                Shader targetShader = _availableShaders[SelectedShaderIndex];
+                ApplyShaderToHand(hand, targetShader);
             }
         }
 
@@ -153,8 +256,9 @@ namespace BonelabUtilityMod
             if (gun == null) return;
             foreach (Renderer r in ((Component)gun).GetComponentsInChildren<Renderer>())
             {
-                foreach (Material mat in (Il2CppArrayBase<Material>)(object)r.materials)
+                foreach (Material mat in (Il2CppArrayBase<Material>)(object)r.sharedMaterials)
                 {
+                    if (mat == null) continue;
                     int id = ((Object)mat).GetInstanceID();
                     if (_origShaders.TryGetValue(id, out var orig))
                         mat.shader = orig;
@@ -446,6 +550,14 @@ namespace BonelabUtilityMod
         {
             bool anyFeature = CustomGunColorEnabled || InsaneDamage || NoRecoil || InsaneFirerate || NoWeight || GunsBounce || NoReload;
             bool texScroll = TextureMode > 0 && TexScrollSpeed > 0f;
+
+            // Auto-apply shader: detect new gun in hand and apply selected shader
+            if (AutoApplyShader && ShaderLibraryEnabled && _availableShaders.Count > 0 && SelectedShaderIndex >= 0 && SelectedShaderIndex < _availableShaders.Count)
+            {
+                try { AutoApplyShaderToHand(Player.LeftHand, ref _lastLeftGunId); } catch { }
+                try { AutoApplyShaderToHand(Player.RightHand, ref _lastRightGunId); } catch { }
+            }
+
             if (!anyFeature && !texScroll) return;
 
             // Advance rainbow hue each frame
@@ -502,6 +614,8 @@ namespace BonelabUtilityMod
             _origMatData.Clear();
             _origShaders.Clear();
             _shadersDirty = true;
+            _lastLeftGunId = 0;
+            _lastRightGunId = 0;
         }
 
         // ── Harmony Patches (supplementary — may not fire on all IL2CPP builds) ──
@@ -548,19 +662,31 @@ namespace BonelabUtilityMod
             ApplyBounceMag(__instance);
             ApplyPurpleMag(__instance);
             ApplyNoWeightMag(__instance);
+            ApplyShaderToMag(__instance);
         }
 
         [HarmonyPatch(typeof(Gun), "OnMagazineInserted")]
         [HarmonyPostfix]
         public static void OnMagInserted(Gun __instance)
         {
-            if (!CustomGunColorEnabled) return;
-            try
+            if (CustomGunColorEnabled)
             {
-                // Apply custom color to the entire gun + inserted magazine hierarchy
-                ApplyCustomColor(((Component)__instance).GetComponentsInChildren<Renderer>(), ((Component)__instance).transform);
+                try
+                {
+                    ApplyCustomColor(((Component)__instance).GetComponentsInChildren<Renderer>(), ((Component)__instance).transform);
+                }
+                catch { }
             }
-            catch { }
+            // Re-trigger shader on magazine insertion (whenever shader library is active)
+            if (ShaderLibraryEnabled && _availableShaders.Count > 0 && SelectedShaderIndex >= 0 && SelectedShaderIndex < _availableShaders.Count)
+            {
+                try
+                {
+                    Shader targetShader = _availableShaders[SelectedShaderIndex];
+                    ApplyShaderToRenderers(((Component)__instance).GetComponentsInChildren<Renderer>(), targetShader);
+                }
+                catch { }
+            }
         }
 
         // ── Feature Implementations ──
@@ -942,14 +1068,23 @@ namespace BonelabUtilityMod
                     int matId = ((Object)mat).GetInstanceID();
                     CacheMatOriginal(mat, matId);
 
+                    // Check if shader was swapped by Shader Editor
+                    bool shaderSwapped = _origShaders.ContainsKey(matId);
+
                     mat.color = rendColor;
                     if (mat.HasProperty("_BaseColor"))
                         mat.SetColor("_BaseColor", rendColor);
-                    // Strip albedo textures so flat color shows through
-                    if (mat.HasProperty("_BaseMap"))
-                        mat.SetTexture("_BaseMap", null);
-                    if (mat.HasProperty("_MainTex"))
-                        mat.SetTexture("_MainTex", null);
+                    if (mat.HasProperty("_Color"))
+                        mat.SetColor("_Color", rendColor);
+                    // Strip albedo textures so flat color shows through — but ONLY if shader
+                    // was NOT swapped (custom shaders rely on their textures for their visual effect)
+                    if (!shaderSwapped)
+                    {
+                        if (mat.HasProperty("_BaseMap"))
+                            mat.SetTexture("_BaseMap", null);
+                        if (mat.HasProperty("_MainTex"))
+                            mat.SetTexture("_MainTex", null);
+                    }
 
                     // ── Reflection ──
                     if (ReflectionEnabled)
@@ -1057,6 +1192,17 @@ namespace BonelabUtilityMod
                 rb.drag = 0f;
                 rb.angularDrag = 0f;
             }
+        }
+
+        private static void ApplyShaderToMag(Magazine mag)
+        {
+            if (!ShaderLibraryEnabled || _availableShaders.Count == 0 || SelectedShaderIndex < 0 || SelectedShaderIndex >= _availableShaders.Count) return;
+            Shader targetShader = _availableShaders[SelectedShaderIndex];
+            try
+            {
+                ApplyShaderToRenderers(((Component)mag).GetComponentsInChildren<Renderer>(), targetShader);
+            }
+            catch { }
         }
     }
 }

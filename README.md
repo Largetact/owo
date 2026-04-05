@@ -1,6 +1,6 @@
 # OwO — Bonelab Utility Mod
 
-> v4.5.0 — A comprehensive MelonLoader utility mod for BONELAB.
+> v4.6.0 — A comprehensive MelonLoader utility mod for BONELAB.
 
 ---
 
@@ -42,7 +42,7 @@
 ### Gun Visuals
 
 - **Custom Gun Color** — Full RGBA color customization for held guns with gradient mode (two-color animated ping-pong along the barrel axis), adjustable gradient speed and spread.
-- **Shader Library** — Browse all loaded game shaders, preview by name, apply any shader to held guns, and revert. Filters hidden/GUI/internal shaders automatically.
+- **Shader Library** — Browse all loaded game shaders, preview by name, apply any shader to held guns, and revert. Favorites system to bookmark preferred shaders, text search to filter by name, favorites-only mode. Automatically skips grip/gizmo/grab components to preserve gun handling. Filters hidden/GUI/internal shaders automatically.
 - **Texture Editor** — Generate and apply procedural textures to held guns. Modes: Original, Solid color, Gradient, and Noise (Perlin-based). Supports UV scroll animation, configurable noise scale, and per-channel color control.
 - **Transparency** — Make guns transparent with adjustable alpha.
 
@@ -55,6 +55,8 @@
 - **Random Explode** — Spontaneous explosions at configurable intervals/chance. B+Y controller shortcut.
 - **Spawn on Player** — Drop items on/above/below other players with launch force, homing, and count controls.
 - **Recoil Ragdoll** — Gun recoil ragdolls the player after a configurable delay. Applies impulse force opposite to barrel direction. Configurable cooldown, force multiplier, and optional gun drop.
+- **Aim Assist** — Aimbot with configurable FOV cone, smoothing, and visibility checks. Uses RaycastAll with sorted filtering to ignore projectiles near the muzzle. Properly handles god-mode players.
+- **ESP** — Player ESP with skeleton rendering, 3D wireframe box outlines, and tracers. Item ESP with Meteor Client-style beacon beams shooting upward from items. All rendering uses VR-compatible shaders (ZTest=Always). Configurable beam height/width. Auto-hides ESP on held objects.
 
 ### Cosmetics
 

@@ -3,6 +3,8 @@ using UnityEngine;
 using BoneLib;
 using System;
 using System.Collections.Generic;
+using HarmonyLib;
+using Il2CppSLZ.Marrow;
 
 namespace BonelabUtilityMod
 {
@@ -18,6 +20,8 @@ namespace BonelabUtilityMod
     ///   Select / Expand:     Left Thumbstick Click
     ///   Increase Slider:     Left Trigger (hold)
     ///   Decrease Slider:     Left Grip (hold, without Y)
+    ///   Next Page:           Y + Left Trigger
+    ///   Previous Page:       X + Left Trigger (without Grip)
     ///   Laser Select:        Right hand aim + Right Trigger
     ///   Page Change:         Laser click on arrow buttons
     /// </summary>
@@ -97,7 +101,7 @@ namespace BonelabUtilityMod
         private static bool _mDash, _mFlight, _mBunnyHop, _mAutoRun, _mSpinbot, _mTeleport, _mWaypoints;
         // Player
         private static bool _pGodMode, _pRagdoll, _pForceGrab;
-        private static bool _pAntiConstraint, _pAntiKnockout, _pUnbreakGrip;
+        private static bool _pAntiConstraint, _pAntiKnockout, _pUnbreakGrip, _pAntiGrab;
         private static bool _pAntiGravChange, _pGhostMode, _pXyzScale;
         private static bool _pAntiRagdoll, _pAntiSlowmo, _pAntiTeleport;
         // Weapons
@@ -108,6 +112,10 @@ namespace BonelabUtilityMod
         private static bool _cExpPunch, _cGroundSlam, _cExpImpact, _cRandExplode;
         private static bool _cObjLauncher = true;
         private static bool _cRecoilRagdoll;
+        private static bool _cHomingThrow;
+        private static bool _cESP;
+        private static bool _cItemESP;
+        private static bool _cAimAssist;
         // Cosmetics
         private static bool _cosWeepingAngel, _cosAvatarCopier, _cosBodyLogColor;
         private static bool _cosHolsterHider, _cosAvatarFx;
@@ -227,9 +235,9 @@ namespace BonelabUtilityMod
             try { lTrig = Input.GetAxis(panelTrigAxis); } catch { }
             bool yDown = Input.GetKey(KeyCode.JoystickButton3);
 
-            // ─── Y + Panel Trigger = page cycling ───
+            // ─── Y + Panel Trigger = page forward, X + Panel Trigger = page backward ───
             bool pageFwd = yDown && lTrig > 0.5f;
-            bool pageBack = false; // Reserved for future use (e.g. X + trigger)
+            bool pageBack = xDown && lTrig > 0.5f && !gripHeld;
 
             if (pageFwd || pageBack)
             {
@@ -1005,6 +1013,10 @@ namespace BonelabUtilityMod
                 AddSlider("Push Force", ForceGrabController.PushForce, 5f, 500f, 5f, v => ForceGrabController.PushForce = v, "F0");
                 AddButton("Clear Selected", () => ForceGrabController.ClearSelected());
             });
+            Sec("Anti-Grab", ref _pAntiGrab, () =>
+            {
+                AddToggle("Enabled", AntiGrabController.Enabled, v => AntiGrabController.Enabled = v);
+            });
             Sec("Anti-Constraint", ref _pAntiConstraint, () =>
             {
                 AddToggle("Enabled", AntiConstraintController.IsEnabled, v => AntiConstraintController.IsEnabled = v);
@@ -1102,11 +1114,16 @@ namespace BonelabUtilityMod
             Sec("Shader Library", ref _gvShaderLib, () =>
             {
                 AddToggle("Shader Library", ChaosGunController.ShaderLibraryEnabled, v => ChaosGunController.ShaderLibraryEnabled = v);
+                AddToggle("Auto-Apply on Grab", ChaosGunController.AutoApplyShader, v => ChaosGunController.AutoApplyShader = v);
+                AddToggle("Favorites Only", ChaosGunController.ShowFavoritesOnly, v => { ChaosGunController.ShowFavoritesOnly = v; SettingsManager.MarkDirty(); });
                 AddButton("Refresh Shaders (" + ChaosGunController.ShaderCount + ")", () => ChaosGunController.RefreshShaderList());
                 if (ChaosGunController.ShaderCount > 0)
                 {
-                    AddLabel("Shader: " + ChaosGunController.SelectedShaderName);
-                    AddLabel("  (" + (ChaosGunController.SelectedShaderIndex + 1) + "/" + ChaosGunController.ShaderCount + ")");
+                    ChaosGunController.RebuildFilterIfNeeded();
+                    string favStar = ChaosGunController.IsCurrentShaderFavorited() ? "\u2605" : "\u2606";
+                    AddLabel("Shader: " + ChaosGunController.FilteredShaderName);
+                    AddLabel("  (" + (ChaosGunController.FilteredCursor + 1) + "/" + ChaosGunController.FilteredCount + ")");
+                    AddButton(favStar + " Toggle Favorite", () => { ChaosGunController.ToggleFavoriteCurrent(); SettingsManager.MarkDirty(); });
                     AddButton("<< Prev Shader", () => ChaosGunController.PrevShader());
                     AddButton("Next Shader >>", () => ChaosGunController.NextShader());
                     AddButton("Apply Shader", () => ChaosGunController.ApplyShaderToGun());
@@ -1193,6 +1210,89 @@ namespace BonelabUtilityMod
                 AddSlider("Cooldown (s)", RecoilRagdollController.Cooldown, 0.1f, 10f, 0.1f, v => RecoilRagdollController.Cooldown = v, "F1");
                 AddSlider("Knockback Force", RecoilRagdollController.ForceMultiplier, 0f, 10f, 0.5f, v => RecoilRagdollController.ForceMultiplier = v, "F1");
                 AddToggle("Drop Gun", RecoilRagdollController.DropGun, v => RecoilRagdollController.DropGun = v);
+            });
+            Sec("Homing Throw", ref _cHomingThrow, () =>
+            {
+                AddToggle("Enabled", HomingThrowController.Enabled, v => HomingThrowController.Enabled = v);
+                AddEnum("Target Filter", System.Enum.GetNames(typeof(TargetFilter)), (int)HomingThrowController.Filter, v => HomingThrowController.Filter = (TargetFilter)v);
+                AddSlider("Strength", HomingThrowController.Strength, 1f, 50f, 1f, v => HomingThrowController.Strength = v, "F1");
+                AddSlider("Speed (0=throw)", HomingThrowController.Speed, 0f, 500f, 5f, v => HomingThrowController.Speed = v, "F0");
+                AddSlider("Duration (0=inf)", HomingThrowController.Duration, 0f, 30f, 0.5f, v => HomingThrowController.Duration = v, "F1");
+                AddSlider("Min Throw Speed", HomingThrowController.MinThrowSpeed, 0f, 20f, 0.5f, v => HomingThrowController.MinThrowSpeed = v, "F1");
+                AddToggle("Rotation Lock", HomingThrowController.RotationLock, v => HomingThrowController.RotationLock = v);
+                AddToggle("Acceleration", HomingThrowController.AccelEnabled, v => HomingThrowController.AccelEnabled = v);
+                AddSlider("Accel Rate", HomingThrowController.AccelRate, 0.1f, 10f, 0.5f, v => HomingThrowController.AccelRate = v, "F1");
+                AddToggle("Target Head", HomingThrowController.TargetHead, v => HomingThrowController.TargetHead = v);
+                AddToggle("Momentum", HomingThrowController.Momentum, v => HomingThrowController.Momentum = v);
+                AddSlider("Stay Duration", HomingThrowController.StayDuration, 0f, 30f, 0.5f, v => HomingThrowController.StayDuration = v, "F1");
+                AddToggle("Recall (Shield)", HomingThrowController.RecallEnabled, v => HomingThrowController.RecallEnabled = v);
+                AddSlider("Recall Speed", HomingThrowController.RecallSpeed, 1f, 50f, 1f, v => HomingThrowController.RecallSpeed = v, "F0");
+                AddSlider("Recall Strength", HomingThrowController.RecallStrength, 1f, 30f, 1f, v => HomingThrowController.RecallStrength = v, "F1");
+                AddToggle("FOV Cone", HomingThrowController.FovConeEnabled, v => HomingThrowController.FovConeEnabled = v);
+                AddSlider("FOV Angle", HomingThrowController.FovAngle, 10f, 180f, 5f, v => HomingThrowController.FovAngle = v, "F0");
+            });
+            Sec("ESP", ref _cESP, () =>
+            {
+                AddToggle("Enabled", ESPController.Enabled, v => ESPController.Enabled = v);
+                AddEnum("Mode", System.Enum.GetNames(typeof(ESPMode)), (int)ESPController.Mode, v => ESPController.Mode = (ESPMode)v);
+                AddEnum("Color Mode", System.Enum.GetNames(typeof(ESPColorMode)), (int)ESPController.ColorMode, v => ESPController.ColorMode = (ESPColorMode)v);
+                AddSlider("Near Color Dist", ESPController.NearColor, 1f, 100f, 5f, v => ESPController.NearColor = v, "F0");
+                AddSlider("Far Color Dist", ESPController.FarColor, 10f, 500f, 10f, v => ESPController.FarColor = v, "F0");
+                AddSlider("Tracer Width", ESPController.TracerWidth, 0.001f, 0.05f, 0.001f, v => ESPController.TracerWidth = v, "F3");
+                AddSlider("Skeleton Width", ESPController.SkeletonWidth, 0.001f, 0.05f, 0.001f, v => ESPController.SkeletonWidth = v, "F3");
+                if (ESPController.ColorMode == ESPColorMode.CustomRGB || ESPController.ColorMode == ESPColorMode.Gradient)
+                {
+                    AddSlider("Color R", ESPController.CustomR, 0f, 1f, 0.05f, v => ESPController.CustomR = v, "F2");
+                    AddSlider("Color G", ESPController.CustomG, 0f, 1f, 0.05f, v => ESPController.CustomG = v, "F2");
+                    AddSlider("Color B", ESPController.CustomB, 0f, 1f, 0.05f, v => ESPController.CustomB = v, "F2");
+                }
+                if (ESPController.ColorMode == ESPColorMode.Gradient)
+                {
+                    AddSlider("Gradient R2", ESPController.GradientR2, 0f, 1f, 0.05f, v => ESPController.GradientR2 = v, "F2");
+                    AddSlider("Gradient G2", ESPController.GradientG2, 0f, 1f, 0.05f, v => ESPController.GradientG2 = v, "F2");
+                    AddSlider("Gradient B2", ESPController.GradientB2, 0f, 1f, 0.05f, v => ESPController.GradientB2 = v, "F2");
+                }
+                if (ESPController.ColorMode == ESPColorMode.Rainbow)
+                {
+                    AddSlider("Rainbow Speed", ESPController.RainbowSpeed, 0.1f, 5f, 0.1f, v => ESPController.RainbowSpeed = v, "F1");
+                }
+            });
+            Sec("Item ESP", ref _cItemESP, () =>
+            {
+                AddToggle("Enabled", ESPController.ItemESPEnabled, v => ESPController.ItemESPEnabled = v);
+                AddEnum("Filter", System.Enum.GetNames(typeof(ItemESPFilter)), (int)ESPController.ItemFilter, v => ESPController.ItemFilter = (ItemESPFilter)v);
+                AddSlider("Max Distance", ESPController.ItemMaxDistance, 10f, 500f, 10f, v => ESPController.ItemMaxDistance = v, "F0");
+                AddSlider("Scan Interval", ESPController.ItemScanInterval, 0.1f, 2f, 0.1f, v => ESPController.ItemScanInterval = v, "F1");
+                AddToggle("Show Labels", ESPController.ItemShowLabels, v => ESPController.ItemShowLabels = v);
+                AddSlider("Beam Height", ESPController.ItemBeamHeight, 5f, 200f, 5f, v => ESPController.ItemBeamHeight = v, "F0");
+                AddSlider("Beam Width", ESPController.ItemBeamWidth, 0.01f, 0.5f, 0.01f, v => ESPController.ItemBeamWidth = v, "F2");
+                AddLabel("--- Category Colors ---");
+                AddSlider("Prop R", ESPController.ItemColorR, 0f, 1f, 0.05f, v => ESPController.ItemColorR = v, "F2");
+                AddSlider("Prop G", ESPController.ItemColorG, 0f, 1f, 0.05f, v => ESPController.ItemColorG = v, "F2");
+                AddSlider("Prop B", ESPController.ItemColorB, 0f, 1f, 0.05f, v => ESPController.ItemColorB = v, "F2");
+                AddSlider("Gun R", ESPController.ItemGunR, 0f, 1f, 0.05f, v => ESPController.ItemGunR = v, "F2");
+                AddSlider("Gun G", ESPController.ItemGunG, 0f, 1f, 0.05f, v => ESPController.ItemGunG = v, "F2");
+                AddSlider("Gun B", ESPController.ItemGunB, 0f, 1f, 0.05f, v => ESPController.ItemGunB = v, "F2");
+                AddSlider("NPC R", ESPController.ItemNpcR, 0f, 1f, 0.05f, v => ESPController.ItemNpcR = v, "F2");
+                AddSlider("NPC G", ESPController.ItemNpcG, 0f, 1f, 0.05f, v => ESPController.ItemNpcG = v, "F2");
+                AddSlider("NPC B", ESPController.ItemNpcB, 0f, 1f, 0.05f, v => ESPController.ItemNpcB = v, "F2");
+                AddSlider("Melee R", ESPController.ItemMeleeR, 0f, 1f, 0.05f, v => ESPController.ItemMeleeR = v, "F2");
+                AddSlider("Melee G", ESPController.ItemMeleeG, 0f, 1f, 0.05f, v => ESPController.ItemMeleeG = v, "F2");
+                AddSlider("Melee B", ESPController.ItemMeleeB, 0f, 1f, 0.05f, v => ESPController.ItemMeleeB = v, "F2");
+            });
+            Sec("Aim Assist", ref _cAimAssist, () =>
+            {
+                AddToggle("Enabled", AimAssistController.Enabled, v => AimAssistController.Enabled = v);
+                AddToggle("Aimbot", AimAssistController.AimBotEnabled, v => AimAssistController.AimBotEnabled = v);
+                AddSlider("Aimbot FOV", AimAssistController.AimFOV, 5f, 360f, 5f, v => AimAssistController.AimFOV = v, "F0");
+                AddEnum("Target", System.Enum.GetNames(typeof(AimTarget)), (int)AimAssistController.Target, v => AimAssistController.Target = (AimTarget)v);
+                AddToggle("Triggerbot", AimAssistController.TriggerBotEnabled, v => AimAssistController.TriggerBotEnabled = v);
+                AddSlider("Triggerbot Delay", AimAssistController.TriggerBotDelay, 0f, 0.5f, 0.01f, v => AimAssistController.TriggerBotDelay = v, "F2");
+                AddToggle("Headshots Only", AimAssistController.HeadshotsOnly, v => AimAssistController.HeadshotsOnly = v);
+                AddToggle("Bullet Drop Comp", AimAssistController.BulletDropComp, v => AimAssistController.BulletDropComp = v);
+                AddToggle("Movement Comp", AimAssistController.MovementComp, v => AimAssistController.MovementComp = v);
+                AddToggle("Acceleration Comp", AimAssistController.AccelerationComp, v => AimAssistController.AccelerationComp = v);
+                AddEnum("Smoothing", System.Enum.GetNames(typeof(CompensationSmoothing)), (int)AimAssistController.Smoothing, v => AimAssistController.Smoothing = (CompensationSmoothing)v);
             });
         }
 
@@ -1435,6 +1535,7 @@ namespace BonelabUtilityMod
             else if (label == "God Mode") _pGodMode = value;
             else if (label == "Ragdoll") _pRagdoll = value;
             else if (label == "Force Grab") _pForceGrab = value;
+            else if (label == "Anti-Grab") _pAntiGrab = value;
             else if (label == "Anti-Constraint") _pAntiConstraint = value;
             else if (label == "Anti-Knockout") _pAntiKnockout = value;
             else if (label == "Unbreakable Grip") _pUnbreakGrip = value;
@@ -1460,6 +1561,10 @@ namespace BonelabUtilityMod
             else if (label == "Random Explode") _cRandExplode = value;
             else if (label == "Object Launcher") _cObjLauncher = value;
             else if (label == "Recoil Ragdoll") _cRecoilRagdoll = value;
+            else if (label == "Homing Throw") _cHomingThrow = value;
+            else if (label == "ESP") _cESP = value;
+            else if (label == "Item ESP") _cItemESP = value;
+            else if (label == "Aim Assist") _cAimAssist = value;
             // Cosmetics
             else if (label == "Weeping Angel") _cosWeepingAngel = value;
             else if (label == "Avatar Copier") _cosAvatarCopier = value;
@@ -1483,5 +1588,30 @@ namespace BonelabUtilityMod
             else if (label == "Notifications") _uNotifications = value;
             else if (label == "Auto-Updater") _uAutoUpdater = value;
         }
+    }
+
+    // ═══════════════════════════════════════════
+    //  Harmony patches: block game inputs while VR overlay is open
+    // ═══════════════════════════════════════════
+
+    [HarmonyPatch(typeof(OpenController), "CheckMenuTap")]
+    internal static class BlockMenuTapPatch
+    {
+        [HarmonyPrefix]
+        internal static bool Prefix() => !VROverlayMenu.IsVisible;
+    }
+
+    [HarmonyPatch(typeof(TimeManager), "TOGGLE_TIMESCALE")]
+    internal static class BlockSlowmoTogglePatch
+    {
+        [HarmonyPrefix]
+        internal static bool Prefix() => !VROverlayMenu.IsVisible;
+    }
+
+    [HarmonyPatch(typeof(TimeManager), "DECREASE_TIMESCALE")]
+    internal static class BlockSlowmoDecreasePatch
+    {
+        [HarmonyPrefix]
+        internal static bool Prefix() => !VROverlayMenu.IsVisible;
     }
 }

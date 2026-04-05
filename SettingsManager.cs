@@ -193,7 +193,8 @@ namespace BonelabUtilityMod
                 "WaypointProjectile", "DropOnPlayer", "ServerQueue",
                 "BodyLogColor", "ScreenShare", "Keybinds", "CosmeticPresets", "Favorites",
                 "AutoRun", "Spinbot", "BunnyHop", "DefaultWorld", "AutoHost", "XYZScale", "DisableAvatarFX", "HolsterHider",
-                "BlockItem", "BlockLocal", "VROverlay", "RecoilRagdoll", "RagdollReload", "AutoUpdater"
+                "BlockItem", "BlockLocal", "VROverlay", "RecoilRagdoll", "RagdollReload", "HomingThrow", "AutoUpdater",
+                "ESP", "AimAssist"
             };
 
             var written = new HashSet<string>(StringComparer.Ordinal);
@@ -386,6 +387,14 @@ namespace BonelabUtilityMod
                 ChaosGunController.GunsBounce = GetBool("GunModifier", "GunsBounce", false);
                 ChaosGunController.NoReload = GetBool("GunModifier", "NoReload", false);
                 ChaosGunController.ShaderLibraryEnabled = GetBool("GunModifier", "ShaderLibraryEnabled", false);
+                ChaosGunController.AutoApplyShader = GetBool("GunModifier", "AutoApplyShader", false);
+                ChaosGunController.ShowFavoritesOnly = GetBool("GunModifier", "ShaderShowFavOnly", false);
+                // Load shader favorites as semicolon-delimited string
+                string favStr = GetValue("GunModifier", "ShaderFavorites", "");
+                if (!string.IsNullOrEmpty(favStr))
+                    ChaosGunController.SetFavorites(new System.Collections.Generic.List<string>(favStr.Split(';')));
+                else
+                    ChaosGunController.SetFavorites(new System.Collections.Generic.List<string>());
                 ChaosGunController.TextureMode = GetInt("GunModifier", "TextureMode", 0);
                 ChaosGunController.TexGradR2 = GetFloat("GunModifier", "TexGradR2", 0f);
                 ChaosGunController.TexGradG2 = GetFloat("GunModifier", "TexGradG2", 0f);
@@ -970,6 +979,79 @@ namespace BonelabUtilityMod
 
             SafeExecute(() =>
             {
+                HomingThrowController.Enabled = GetBool("HomingThrow", "Enabled", false);
+                HomingThrowController.Filter = (TargetFilter)GetInt("HomingThrow", "Filter", (int)TargetFilter.NEAREST);
+                HomingThrowController.Strength = GetFloat("HomingThrow", "Strength", 5f);
+                HomingThrowController.Speed = GetFloat("HomingThrow", "Speed", 0f);
+                HomingThrowController.Duration = GetFloat("HomingThrow", "Duration", 0f);
+                HomingThrowController.MinThrowSpeed = GetFloat("HomingThrow", "MinThrowSpeed", 2f);
+                HomingThrowController.RotationLock = GetBool("HomingThrow", "RotationLock", false);
+                HomingThrowController.AccelEnabled = GetBool("HomingThrow", "Accel", false);
+                HomingThrowController.AccelRate = GetFloat("HomingThrow", "AccelRate", 2f);
+                HomingThrowController.TargetHead = GetBool("HomingThrow", "TargetHead", false);
+                HomingThrowController.Momentum = GetBool("HomingThrow", "Momentum", false);
+                HomingThrowController.StayDuration = GetFloat("HomingThrow", "StayDuration", 2f);
+                HomingThrowController.RecallEnabled = GetBool("HomingThrow", "RecallEnabled", false);
+                HomingThrowController.RecallSpeed = GetFloat("HomingThrow", "RecallSpeed", 15f);
+                HomingThrowController.RecallStrength = GetFloat("HomingThrow", "RecallStrength", 8f);
+                HomingThrowController.FovConeEnabled = GetBool("HomingThrow", "FovConeEnabled", false);
+                HomingThrowController.FovAngle = GetFloat("HomingThrow", "FovAngle", 90f);
+            }, "Load HomingThrow");
+
+            SafeExecute(() =>
+            {
+                ESPController.Enabled = GetBool("ESP", "Enabled", false);
+                ESPController.Mode = (ESPMode)GetInt("ESP", "Mode", (int)ESPMode.TRACERS);
+                ESPController.ColorMode = (ESPColorMode)GetInt("ESP", "ColorMode", (int)ESPColorMode.Distance);
+                ESPController.NearColor = GetFloat("ESP", "NearColor", 10f);
+                ESPController.FarColor = GetFloat("ESP", "FarColor", 100f);
+                ESPController.TracerWidth = GetFloat("ESP", "TracerWidth", 0.005f);
+                ESPController.SkeletonWidth = GetFloat("ESP", "SkeletonWidth", 0.003f);
+                ESPController.CustomR = GetFloat("ESP", "CustomR", 1f);
+                ESPController.CustomG = GetFloat("ESP", "CustomG", 0f);
+                ESPController.CustomB = GetFloat("ESP", "CustomB", 0f);
+                ESPController.GradientR2 = GetFloat("ESP", "GradientR2", 0f);
+                ESPController.GradientG2 = GetFloat("ESP", "GradientG2", 0f);
+                ESPController.GradientB2 = GetFloat("ESP", "GradientB2", 1f);
+                ESPController.RainbowSpeed = GetFloat("ESP", "RainbowSpeed", 1f);
+                ESPController.ItemESPEnabled = GetBool("ESP", "ItemESPEnabled", false);
+                ESPController.ItemFilter = (ItemESPFilter)GetInt("ESP", "ItemFilter", 0);
+                ESPController.ItemMaxDistance = GetFloat("ESP", "ItemMaxDistance", 200f);
+                ESPController.ItemScanInterval = GetFloat("ESP", "ItemScanInterval", 0.5f);
+                ESPController.ItemShowLabels = GetBool("ESP", "ItemShowLabels", true);
+                ESPController.ItemBeamHeight = GetFloat("ESP", "ItemBeamHeight", 50f);
+                ESPController.ItemBeamWidth = GetFloat("ESP", "ItemBeamWidth", 0.08f);
+                ESPController.ItemColorR = GetFloat("ESP", "ItemColorR", 1f);
+                ESPController.ItemColorG = GetFloat("ESP", "ItemColorG", 0.6f);
+                ESPController.ItemColorB = GetFloat("ESP", "ItemColorB", 0f);
+                ESPController.ItemNpcR = GetFloat("ESP", "ItemNpcR", 1f);
+                ESPController.ItemNpcG = GetFloat("ESP", "ItemNpcG", 0.2f);
+                ESPController.ItemNpcB = GetFloat("ESP", "ItemNpcB", 0.2f);
+                ESPController.ItemGunR = GetFloat("ESP", "ItemGunR", 0.2f);
+                ESPController.ItemGunG = GetFloat("ESP", "ItemGunG", 0.8f);
+                ESPController.ItemGunB = GetFloat("ESP", "ItemGunB", 1f);
+                ESPController.ItemMeleeR = GetFloat("ESP", "ItemMeleeR", 1f);
+                ESPController.ItemMeleeG = GetFloat("ESP", "ItemMeleeG", 1f);
+                ESPController.ItemMeleeB = GetFloat("ESP", "ItemMeleeB", 0.2f);
+            }, "Load ESP");
+
+            SafeExecute(() =>
+            {
+                AimAssistController.Enabled = GetBool("AimAssist", "Enabled", false);
+                AimAssistController.AimBotEnabled = GetBool("AimAssist", "AimBot", true);
+                AimAssistController.TriggerBotEnabled = GetBool("AimAssist", "TriggerBot", false);
+                AimAssistController.HeadshotsOnly = GetBool("AimAssist", "HeadshotsOnly", false);
+                AimAssistController.BulletDropComp = GetBool("AimAssist", "BulletDrop", true);
+                AimAssistController.MovementComp = GetBool("AimAssist", "MovementComp", true);
+                AimAssistController.AccelerationComp = GetBool("AimAssist", "AccelComp", true);
+                AimAssistController.AimFOV = GetFloat("AimAssist", "FOV", 180f);
+                AimAssistController.Target = (AimTarget)GetInt("AimAssist", "Target", (int)AimTarget.Head);
+                AimAssistController.Smoothing = (CompensationSmoothing)GetInt("AimAssist", "Smoothing", (int)CompensationSmoothing.Adaptive);
+                AimAssistController.TriggerBotDelay = GetFloat("AimAssist", "TriggerBotDelay", 0.08f);
+            }, "Load AimAssist");
+
+            SafeExecute(() =>
+            {
                 AutoUpdaterController.AutoCheckEnabled = GetBool("AutoUpdater", "AutoCheck", false);
                 AutoUpdaterController.AutoInstallEnabled = GetBool("AutoUpdater", "AutoInstall", false);
                 AutoUpdaterController.BackupOldDlls = GetBool("AutoUpdater", "BackupOld", true);
@@ -1064,6 +1146,9 @@ namespace BonelabUtilityMod
                 SetBool("GunModifier", "GunsBounce", ChaosGunController.GunsBounce);
                 SetBool("GunModifier", "NoReload", ChaosGunController.NoReload);
                 SetBool("GunModifier", "ShaderLibraryEnabled", ChaosGunController.ShaderLibraryEnabled);
+                SetBool("GunModifier", "AutoApplyShader", ChaosGunController.AutoApplyShader);
+                SetBool("GunModifier", "ShaderShowFavOnly", ChaosGunController.ShowFavoritesOnly);
+                SetValue("GunModifier", "ShaderFavorites", string.Join(";", ChaosGunController.FavoriteShaderNames));
                 SetInt("GunModifier", "TextureMode", ChaosGunController.TextureMode);
                 SetFloat("GunModifier", "TexGradR2", ChaosGunController.TexGradR2);
                 SetFloat("GunModifier", "TexGradG2", ChaosGunController.TexGradG2);
@@ -1630,6 +1715,79 @@ namespace BonelabUtilityMod
                 SetBool("RagdollReload", "Enabled", RagdollReloadController.Enabled);
                 SetFloat("RagdollReload", "InsertDistance", RagdollReloadController.InsertDistance);
             }, "Save RagdollReload");
+
+            SafeExecute(() =>
+            {
+                SetBool("HomingThrow", "Enabled", HomingThrowController.Enabled);
+                SetInt("HomingThrow", "Filter", (int)HomingThrowController.Filter);
+                SetFloat("HomingThrow", "Strength", HomingThrowController.Strength);
+                SetFloat("HomingThrow", "Speed", HomingThrowController.Speed);
+                SetFloat("HomingThrow", "Duration", HomingThrowController.Duration);
+                SetFloat("HomingThrow", "MinThrowSpeed", HomingThrowController.MinThrowSpeed);
+                SetBool("HomingThrow", "RotationLock", HomingThrowController.RotationLock);
+                SetBool("HomingThrow", "Accel", HomingThrowController.AccelEnabled);
+                SetFloat("HomingThrow", "AccelRate", HomingThrowController.AccelRate);
+                SetBool("HomingThrow", "TargetHead", HomingThrowController.TargetHead);
+                SetBool("HomingThrow", "Momentum", HomingThrowController.Momentum);
+                SetFloat("HomingThrow", "StayDuration", HomingThrowController.StayDuration);
+                SetBool("HomingThrow", "RecallEnabled", HomingThrowController.RecallEnabled);
+                SetFloat("HomingThrow", "RecallSpeed", HomingThrowController.RecallSpeed);
+                SetFloat("HomingThrow", "RecallStrength", HomingThrowController.RecallStrength);
+                SetBool("HomingThrow", "FovConeEnabled", HomingThrowController.FovConeEnabled);
+                SetFloat("HomingThrow", "FovAngle", HomingThrowController.FovAngle);
+            }, "Save HomingThrow");
+
+            SafeExecute(() =>
+            {
+                SetBool("ESP", "Enabled", ESPController.Enabled);
+                SetInt("ESP", "Mode", (int)ESPController.Mode);
+                SetInt("ESP", "ColorMode", (int)ESPController.ColorMode);
+                SetFloat("ESP", "NearColor", ESPController.NearColor);
+                SetFloat("ESP", "FarColor", ESPController.FarColor);
+                SetFloat("ESP", "TracerWidth", ESPController.TracerWidth);
+                SetFloat("ESP", "SkeletonWidth", ESPController.SkeletonWidth);
+                SetFloat("ESP", "CustomR", ESPController.CustomR);
+                SetFloat("ESP", "CustomG", ESPController.CustomG);
+                SetFloat("ESP", "CustomB", ESPController.CustomB);
+                SetFloat("ESP", "GradientR2", ESPController.GradientR2);
+                SetFloat("ESP", "GradientG2", ESPController.GradientG2);
+                SetFloat("ESP", "GradientB2", ESPController.GradientB2);
+                SetFloat("ESP", "RainbowSpeed", ESPController.RainbowSpeed);
+                SetBool("ESP", "ItemESPEnabled", ESPController.ItemESPEnabled);
+                SetInt("ESP", "ItemFilter", (int)ESPController.ItemFilter);
+                SetFloat("ESP", "ItemMaxDistance", ESPController.ItemMaxDistance);
+                SetFloat("ESP", "ItemScanInterval", ESPController.ItemScanInterval);
+                SetBool("ESP", "ItemShowLabels", ESPController.ItemShowLabels);
+                SetFloat("ESP", "ItemBeamHeight", ESPController.ItemBeamHeight);
+                SetFloat("ESP", "ItemBeamWidth", ESPController.ItemBeamWidth);
+                SetFloat("ESP", "ItemColorR", ESPController.ItemColorR);
+                SetFloat("ESP", "ItemColorG", ESPController.ItemColorG);
+                SetFloat("ESP", "ItemColorB", ESPController.ItemColorB);
+                SetFloat("ESP", "ItemNpcR", ESPController.ItemNpcR);
+                SetFloat("ESP", "ItemNpcG", ESPController.ItemNpcG);
+                SetFloat("ESP", "ItemNpcB", ESPController.ItemNpcB);
+                SetFloat("ESP", "ItemGunR", ESPController.ItemGunR);
+                SetFloat("ESP", "ItemGunG", ESPController.ItemGunG);
+                SetFloat("ESP", "ItemGunB", ESPController.ItemGunB);
+                SetFloat("ESP", "ItemMeleeR", ESPController.ItemMeleeR);
+                SetFloat("ESP", "ItemMeleeG", ESPController.ItemMeleeG);
+                SetFloat("ESP", "ItemMeleeB", ESPController.ItemMeleeB);
+            }, "Save ESP");
+
+            SafeExecute(() =>
+            {
+                SetBool("AimAssist", "Enabled", AimAssistController.Enabled);
+                SetBool("AimAssist", "AimBot", AimAssistController.AimBotEnabled);
+                SetBool("AimAssist", "TriggerBot", AimAssistController.TriggerBotEnabled);
+                SetBool("AimAssist", "HeadshotsOnly", AimAssistController.HeadshotsOnly);
+                SetBool("AimAssist", "BulletDrop", AimAssistController.BulletDropComp);
+                SetBool("AimAssist", "MovementComp", AimAssistController.MovementComp);
+                SetBool("AimAssist", "AccelComp", AimAssistController.AccelerationComp);
+                SetFloat("AimAssist", "FOV", AimAssistController.AimFOV);
+                SetInt("AimAssist", "Target", (int)AimAssistController.Target);
+                SetInt("AimAssist", "Smoothing", (int)AimAssistController.Smoothing);
+                SetFloat("AimAssist", "TriggerBotDelay", AimAssistController.TriggerBotDelay);
+            }, "Save AimAssist");
 
             SafeExecute(() =>
             {

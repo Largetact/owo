@@ -14,7 +14,8 @@ namespace BonelabUtilityMod
         NEAREST,
         HEAVIEST,
         LIGHTEST,
-        SELECTED
+        SELECTED,
+        FURTHEST
     }
 
     /// <summary>
@@ -176,6 +177,8 @@ namespace BonelabUtilityMod
                     return valid.OrderByDescending(v => v.mass).First().rig;
                 case TargetFilter.LIGHTEST:
                     return valid.OrderBy(v => v.mass).First().rig;
+                case TargetFilter.FURTHEST:
+                    return valid.OrderByDescending(v => v.dist).First().rig;
                 default:
                     return valid[0].rig;
             }

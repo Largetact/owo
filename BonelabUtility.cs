@@ -89,7 +89,7 @@ namespace BonelabUtilityMod
         internal const string Name = "OwO";
         internal const string Description = "Bullshit Client for people with schizophrenia";
         internal const string Author = "XI";
-        internal const string Version = "4.5.0";
+        internal const string Version = "4.6.0";
 
         private static readonly string[] _emoticons = { "UwU", "QwQ", ".w.", "^w^", ";w;", "=w=", "-w-", "0w0", "7w7", "XwX" };
         private static int _emoticonIndex = 0;
@@ -259,8 +259,11 @@ namespace BonelabUtilityMod
             DamageMultiplierController.Initialize();
             AINpcController.Initialize();
             RagdollReloadController.Initialize();
+            HomingThrowController.Initialize();
             AvatarLoggerController.Initialize();
             PlayerActionLoggerController.Initialize();
+            ESPController.Initialize();
+            AimAssistController.Initialize();
 
             // Load saved settings and apply to controllers
             // Suppress the notification that would fire on boot when loading saved toggle
@@ -701,6 +704,9 @@ namespace BonelabUtilityMod
             RagdollController.Update();
             RecoilRagdollController.Update();
             RagdollReloadController.Update();
+            HomingThrowController.Update();
+            ESPController.Update();
+            AimAssistController.Update();
             BodyLogColorController.Update();
             KeybindManager.Update();
             BlockController.Update();
@@ -766,6 +772,7 @@ namespace BonelabUtilityMod
         {
             OverlayMenu.Draw();
             QuickMenuController.Draw();
+            ESPController.OnGUI();
         }
 
         public override void OnDeinitializeMelon()
@@ -1553,15 +1560,24 @@ namespace BonelabUtilityMod
                 var shaderLibPage = gunVisualsPage.CreatePage("Shader Library", Color.cyan);
                 shaderLibPage.CreateBool("Enabled", Color.green, ChaosGunController.ShaderLibraryEnabled,
                     (value) => { ChaosGunController.ShaderLibraryEnabled = value; SettingsManager.MarkDirty(); });
+                shaderLibPage.CreateBool("Auto-Apply on Grab", Color.yellow, ChaosGunController.AutoApplyShader,
+                    (value) => { ChaosGunController.AutoApplyShader = value; SettingsManager.MarkDirty(); });
+                shaderLibPage.CreateBool("Favorites Only", Color.magenta, ChaosGunController.ShowFavoritesOnly,
+                    (value) => { ChaosGunController.ShowFavoritesOnly = value; SettingsManager.MarkDirty(); });
                 shaderLibPage.CreateFunction(
                     "Refresh Shader List",
                     Color.yellow,
                     ChaosGunController.RefreshShaderList
                 );
                 shaderLibPage.CreateFunction(
-                    $"Current: {ChaosGunController.SelectedShaderName}",
+                    $"Current: {ChaosGunController.FilteredShaderName}",
                     Color.white,
                     () => { }
+                );
+                shaderLibPage.CreateFunction(
+                    ChaosGunController.IsCurrentShaderFavorited() ? "\u2605 Unfavorite" : "\u2606 Favorite",
+                    Color.magenta,
+                    () => { ChaosGunController.ToggleFavoriteCurrent(); SettingsManager.MarkDirty(); }
                 );
                 shaderLibPage.CreateFunction(
                     "Next Shader >>",
@@ -2509,6 +2525,122 @@ namespace BonelabUtilityMod
                     (value) => { RecoilRagdollController.ForceMultiplier = value; SettingsManager.MarkDirty(); });
                 recoilRagdollPage.CreateBool("Drop Gun", Color.red, RecoilRagdollController.DropGun,
                     (value) => { RecoilRagdollController.DropGun = value; SettingsManager.MarkDirty(); });
+
+                // ============================================
+                // HOMING THROW submenu
+                // ============================================
+                var homingThrowPage = combatPage.CreatePage("Homing Throw", Color.cyan);
+                homingThrowPage.CreateBool("Enabled", Color.white, HomingThrowController.Enabled,
+                    (value) => { HomingThrowController.Enabled = value; SettingsManager.MarkDirty(); });
+                homingThrowPage.CreateEnum("Target Filter", Color.yellow, HomingThrowController.Filter,
+                    (value) => { HomingThrowController.Filter = (TargetFilter)value; SettingsManager.MarkDirty(); });
+                homingThrowPage.CreateFloat("Strength", Color.green, HomingThrowController.Strength, 1f, 1f, 50f,
+                    (value) => { HomingThrowController.Strength = value; SettingsManager.MarkDirty(); });
+                homingThrowPage.CreateFloat("Speed (0=throw)", Color.green, HomingThrowController.Speed, 5f, 0f, 500f,
+                    (value) => { HomingThrowController.Speed = value; SettingsManager.MarkDirty(); });
+                homingThrowPage.CreateFloat("Duration (0=inf)", Color.cyan, HomingThrowController.Duration, 0.5f, 0f, 30f,
+                    (value) => { HomingThrowController.Duration = value; SettingsManager.MarkDirty(); });
+                homingThrowPage.CreateFloat("Min Throw Speed", Color.yellow, HomingThrowController.MinThrowSpeed, 0.5f, 0f, 20f,
+                    (value) => { HomingThrowController.MinThrowSpeed = value; SettingsManager.MarkDirty(); });
+                homingThrowPage.CreateBool("Rotation Lock", Color.cyan, HomingThrowController.RotationLock,
+                    (value) => { HomingThrowController.RotationLock = value; SettingsManager.MarkDirty(); });
+                homingThrowPage.CreateBool("Acceleration", Color.yellow, HomingThrowController.AccelEnabled,
+                    (value) => { HomingThrowController.AccelEnabled = value; SettingsManager.MarkDirty(); });
+                homingThrowPage.CreateFloat("Accel Rate", Color.yellow, HomingThrowController.AccelRate, 0.5f, 0.1f, 10f,
+                    (value) => { HomingThrowController.AccelRate = value; SettingsManager.MarkDirty(); });
+                homingThrowPage.CreateBool("Target Head", Color.red, HomingThrowController.TargetHead,
+                    (value) => { HomingThrowController.TargetHead = value; SettingsManager.MarkDirty(); });
+                homingThrowPage.CreateBool("Momentum", Color.magenta, HomingThrowController.Momentum,
+                    (value) => { HomingThrowController.Momentum = value; SettingsManager.MarkDirty(); });
+                homingThrowPage.CreateFloat("Stay Duration", Color.cyan, HomingThrowController.StayDuration, 0.5f, 0f, 30f,
+                    (value) => { HomingThrowController.StayDuration = value; SettingsManager.MarkDirty(); });
+                var recallPage = homingThrowPage.CreatePage("Recall (Shield)", Color.yellow);
+                recallPage.CreateBool("Recall Enabled", Color.white, HomingThrowController.RecallEnabled,
+                    (value) => { HomingThrowController.RecallEnabled = value; SettingsManager.MarkDirty(); });
+                recallPage.CreateFloat("Recall Speed", Color.green, HomingThrowController.RecallSpeed, 1f, 1f, 50f,
+                    (value) => { HomingThrowController.RecallSpeed = value; SettingsManager.MarkDirty(); });
+                recallPage.CreateFloat("Recall Strength", Color.cyan, HomingThrowController.RecallStrength, 1f, 1f, 30f,
+                    (value) => { HomingThrowController.RecallStrength = value; SettingsManager.MarkDirty(); });
+                var fovConePage = homingThrowPage.CreatePage("FOV Cone", Color.yellow);
+                fovConePage.CreateBool("FOV Cone Enabled", Color.white, HomingThrowController.FovConeEnabled,
+                    (value) => { HomingThrowController.FovConeEnabled = value; SettingsManager.MarkDirty(); });
+                fovConePage.CreateFloat("FOV Angle", Color.yellow, HomingThrowController.FovAngle, 5f, 10f, 180f,
+                    (value) => { HomingThrowController.FovAngle = value; SettingsManager.MarkDirty(); });
+                BuildSelectPlayerSubMenu(homingThrowPage);
+
+                // ── ESP submenu (inside Combat) ──
+                var espPage = combatPage.CreatePage("ESP", Color.green);
+                espPage.CreateBool("Enabled", Color.white, ESPController.Enabled,
+                    (value) => { ESPController.Enabled = value; SettingsManager.MarkDirty(); });
+                espPage.CreateEnum("Mode", Color.green, ESPController.Mode,
+                    (value) => { ESPController.Mode = (ESPMode)value; SettingsManager.MarkDirty(); });
+                espPage.CreateEnum("Color Mode", Color.yellow, ESPController.ColorMode,
+                    (value) => { ESPController.ColorMode = (ESPColorMode)value; SettingsManager.MarkDirty(); });
+                espPage.CreateFloat("Near Color Dist", Color.green, ESPController.NearColor, 5f, 1f, 100f,
+                    (value) => { ESPController.NearColor = value; SettingsManager.MarkDirty(); });
+                espPage.CreateFloat("Far Color Dist", Color.red, ESPController.FarColor, 10f, 10f, 500f,
+                    (value) => { ESPController.FarColor = value; SettingsManager.MarkDirty(); });
+                espPage.CreateFloat("Tracer Width", Color.cyan, ESPController.TracerWidth, 0.001f, 0.001f, 0.05f,
+                    (value) => { ESPController.TracerWidth = value; SettingsManager.MarkDirty(); });
+                espPage.CreateFloat("Skeleton Width", Color.cyan, ESPController.SkeletonWidth, 0.001f, 0.001f, 0.05f,
+                    (value) => { ESPController.SkeletonWidth = value; SettingsManager.MarkDirty(); });
+                espPage.CreateFloat("Custom R", Color.red, ESPController.CustomR, 0.05f, 0f, 1f,
+                    (value) => { ESPController.CustomR = value; SettingsManager.MarkDirty(); });
+                espPage.CreateFloat("Custom G", Color.green, ESPController.CustomG, 0.05f, 0f, 1f,
+                    (value) => { ESPController.CustomG = value; SettingsManager.MarkDirty(); });
+                espPage.CreateFloat("Custom B", Color.blue, ESPController.CustomB, 0.05f, 0f, 1f,
+                    (value) => { ESPController.CustomB = value; SettingsManager.MarkDirty(); });
+                espPage.CreateFloat("Gradient R2", Color.red, ESPController.GradientR2, 0.05f, 0f, 1f,
+                    (value) => { ESPController.GradientR2 = value; SettingsManager.MarkDirty(); });
+                espPage.CreateFloat("Gradient G2", Color.green, ESPController.GradientG2, 0.05f, 0f, 1f,
+                    (value) => { ESPController.GradientG2 = value; SettingsManager.MarkDirty(); });
+                espPage.CreateFloat("Gradient B2", Color.blue, ESPController.GradientB2, 0.05f, 0f, 1f,
+                    (value) => { ESPController.GradientB2 = value; SettingsManager.MarkDirty(); });
+                espPage.CreateFloat("Rainbow Speed", Color.yellow, ESPController.RainbowSpeed, 0.1f, 0.1f, 5f,
+                    (value) => { ESPController.RainbowSpeed = value; SettingsManager.MarkDirty(); });
+
+                // ── Item ESP submenu (inside Combat) ──
+                var itemEspPage = combatPage.CreatePage("Item ESP", Color.yellow);
+                itemEspPage.CreateBool("Enabled", Color.white, ESPController.ItemESPEnabled,
+                    (value) => { ESPController.ItemESPEnabled = value; SettingsManager.MarkDirty(); });
+                itemEspPage.CreateEnum("Filter", Color.cyan, ESPController.ItemFilter,
+                    (value) => { ESPController.ItemFilter = (ItemESPFilter)value; SettingsManager.MarkDirty(); });
+                itemEspPage.CreateFloat("Max Distance", Color.green, ESPController.ItemMaxDistance, 10f, 10f, 500f,
+                    (value) => { ESPController.ItemMaxDistance = value; SettingsManager.MarkDirty(); });
+                itemEspPage.CreateFloat("Scan Interval", Color.yellow, ESPController.ItemScanInterval, 0.1f, 0.1f, 2f,
+                    (value) => { ESPController.ItemScanInterval = value; SettingsManager.MarkDirty(); });
+                itemEspPage.CreateBool("Show Labels", Color.white, ESPController.ItemShowLabels,
+                    (value) => { ESPController.ItemShowLabels = value; SettingsManager.MarkDirty(); });
+                itemEspPage.CreateFloat("Beam Height", Color.green, ESPController.ItemBeamHeight, 5f, 5f, 200f,
+                    (value) => { ESPController.ItemBeamHeight = value; SettingsManager.MarkDirty(); });
+                itemEspPage.CreateFloat("Beam Width", Color.green, ESPController.ItemBeamWidth, 0.01f, 0.01f, 0.5f,
+                    (value) => { ESPController.ItemBeamWidth = value; SettingsManager.MarkDirty(); });
+
+                // ── Aim Assist submenu (inside Combat) ──
+                var aimPage = combatPage.CreatePage("Aim Assist", Color.red);
+                aimPage.CreateBool("Enabled", Color.white, AimAssistController.Enabled,
+                    (value) => { AimAssistController.Enabled = value; SettingsManager.MarkDirty(); });
+                aimPage.CreateBool("Aimbot", Color.red, AimAssistController.AimBotEnabled,
+                    (value) => { AimAssistController.AimBotEnabled = value; SettingsManager.MarkDirty(); });
+                aimPage.CreateFloat("Aimbot FOV", Color.red, AimAssistController.AimFOV, 5f, 5f, 360f,
+                    (value) => { AimAssistController.AimFOV = value; SettingsManager.MarkDirty(); });
+                aimPage.CreateEnum("Target", Color.red, AimAssistController.Target,
+                    (value) => { AimAssistController.Target = (AimTarget)value; SettingsManager.MarkDirty(); });
+                aimPage.CreateBool("Triggerbot", Color.magenta, AimAssistController.TriggerBotEnabled,
+                    (value) => { AimAssistController.TriggerBotEnabled = value; SettingsManager.MarkDirty(); });
+                aimPage.CreateFloat("Triggerbot Delay", Color.magenta, AimAssistController.TriggerBotDelay, 0.01f, 0f, 0.5f,
+                    (value) => { AimAssistController.TriggerBotDelay = value; SettingsManager.MarkDirty(); });
+                aimPage.CreateBool("Headshots Only", Color.yellow, AimAssistController.HeadshotsOnly,
+                    (value) => { AimAssistController.HeadshotsOnly = value; SettingsManager.MarkDirty(); });
+                var aimAdvanced = aimPage.CreatePage("Advanced", Color.green);
+                aimAdvanced.CreateBool("Bullet Drop Comp", Color.white, AimAssistController.BulletDropComp,
+                    (value) => { AimAssistController.BulletDropComp = value; SettingsManager.MarkDirty(); });
+                aimAdvanced.CreateBool("Movement Comp", Color.white, AimAssistController.MovementComp,
+                    (value) => { AimAssistController.MovementComp = value; SettingsManager.MarkDirty(); });
+                aimAdvanced.CreateBool("Acceleration Comp", Color.white, AimAssistController.AccelerationComp,
+                    (value) => { AimAssistController.AccelerationComp = value; SettingsManager.MarkDirty(); });
+                aimAdvanced.CreateEnum("Smoothing", Color.white, AimAssistController.Smoothing,
+                    (value) => { AimAssistController.Smoothing = (CompensationSmoothing)value; SettingsManager.MarkDirty(); });
 
                 // ============================================
                 // COSMETICS top-level page

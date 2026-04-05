@@ -223,6 +223,9 @@ namespace BonelabUtilityMod
         {
             try
             {
+                // Block dash input while VR overlay menu is open
+                if (VROverlayMenu.IsVisible) return;
+
                 // Check for thumbstick click
                 // Left thumbstick = JoystickButton8, Right thumbstick = JoystickButton9
                 bool rightStickPressed = false;

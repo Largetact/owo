@@ -128,6 +128,10 @@ namespace BonelabUtilityMod
         private static bool _combatWaypointProj = false;
         private static bool _combatObjLauncher = false;
         private static bool _combatRecoilRagdoll = false;
+        private static bool _combatHomingThrow = false;
+        private static bool _combatESP = false;
+        private static bool _combatItemESP = false;
+        private static bool _combatAimAssist = false;
 
         // Utility page collapsible sections (new)
         private static bool _utilAINpc = false;
@@ -751,6 +755,91 @@ namespace BonelabUtilityMod
             if (GUI.Button(new Rect(PAD + labelW + 5f, y, btnW, ROW), mode.ToString(), _cachedButtonStyle))
             {
                 mode = (SpinDirection)(((int)mode + 1) % names.Length);
+                SettingsManager.MarkDirty();
+            }
+            GUI.color = ec;
+            return y + ROW + 2f;
+        }
+
+        private static float EnumCycle(string label, ref ESPMode mode, float y, float w)
+        {
+            var names = System.Enum.GetNames(typeof(ESPMode));
+            float labelW = w * 0.45f;
+            float btnW = w * 0.5f;
+            GUI.Label(new Rect(PAD, y, labelW, ROW), label + ": " + mode);
+            Color ec = GUI.color;
+            GUI.color = _accentColor * new Color(1f, 1f, 1f, _menuOpacity);
+            if (GUI.Button(new Rect(PAD + labelW + 5f, y, btnW, ROW), mode.ToString(), _cachedButtonStyle))
+            {
+                mode = (ESPMode)(((int)mode + 1) % names.Length);
+                SettingsManager.MarkDirty();
+            }
+            GUI.color = ec;
+            return y + ROW + 2f;
+        }
+
+        private static float EnumCycle(string label, ref ESPColorMode mode, float y, float w)
+        {
+            var names = System.Enum.GetNames(typeof(ESPColorMode));
+            float labelW = w * 0.45f;
+            float btnW = w * 0.5f;
+            GUI.Label(new Rect(PAD, y, labelW, ROW), label + ": " + mode);
+            Color ec = GUI.color;
+            GUI.color = _accentColor * new Color(1f, 1f, 1f, _menuOpacity);
+            if (GUI.Button(new Rect(PAD + labelW + 5f, y, btnW, ROW), mode.ToString(), _cachedButtonStyle))
+            {
+                mode = (ESPColorMode)(((int)mode + 1) % names.Length);
+                SettingsManager.MarkDirty();
+            }
+            GUI.color = ec;
+            return y + ROW + 2f;
+        }
+
+        private static float EnumCycle(string label, ref ItemESPFilter mode, float y, float w)
+        {
+            var names = System.Enum.GetNames(typeof(ItemESPFilter));
+            float labelW = w * 0.45f;
+            float btnW = w * 0.5f;
+            GUI.Label(new Rect(PAD, y, labelW, ROW), label + ": " + mode);
+            Color ec = GUI.color;
+            GUI.color = _accentColor * new Color(1f, 1f, 1f, _menuOpacity);
+            if (GUI.Button(new Rect(PAD + labelW + 5f, y, btnW, ROW), mode.ToString(), _cachedButtonStyle))
+            {
+                mode = (ItemESPFilter)(((int)mode + 1) % names.Length);
+                SettingsManager.MarkDirty();
+            }
+            GUI.color = ec;
+            return y + ROW + 2f;
+        }
+
+        private static float EnumCycle(string label, ref AimTarget mode, float y, float w)
+        {
+            var names = System.Enum.GetNames(typeof(AimTarget));
+            float labelW = w * 0.45f;
+            float btnW = w * 0.5f;
+            GUI.Label(new Rect(PAD, y, labelW, ROW), label + ": " + mode);
+            Color ec = GUI.color;
+            GUI.color = _accentColor * new Color(1f, 1f, 1f, _menuOpacity);
+            if (GUI.Button(new Rect(PAD + labelW + 5f, y, btnW, ROW), mode.ToString(), _cachedButtonStyle))
+            {
+                mode = (AimTarget)(((int)mode + 1) % names.Length);
+                SettingsManager.MarkDirty();
+            }
+            GUI.color = ec;
+            return y + ROW + 2f;
+        }
+
+        private static float EnumCycle(string label, ref CompensationSmoothing mode, float y, float w)
+        {
+            var names = System.Enum.GetNames(typeof(CompensationSmoothing));
+            float labelW = w * 0.45f;
+            float btnW = w * 0.5f;
+            GUI.Label(new Rect(PAD, y, labelW, ROW), label + ": " + mode);
+            Color ec = GUI.color;
+            GUI.color = _accentColor * new Color(1f, 1f, 1f, _menuOpacity);
+            if (GUI.Button(new Rect(PAD + labelW + 5f, y, btnW, ROW), mode.ToString(), _cachedButtonStyle))
+            {
+                mode = (CompensationSmoothing)(((int)mode + 1) % names.Length);
                 SettingsManager.MarkDirty();
             }
             GUI.color = ec;
@@ -1687,12 +1776,27 @@ namespace BonelabUtilityMod
                 y = Toggle(ref shEn, "Enabled", y, w);
                 ChaosGunController.ShaderLibraryEnabled = shEn;
 
+                bool aaShader = ChaosGunController.AutoApplyShader;
+                y = Toggle(ref aaShader, "Auto-Apply on Grab", y, w);
+                ChaosGunController.AutoApplyShader = aaShader;
+
+                bool favOnly = ChaosGunController.ShowFavoritesOnly;
+                y = Toggle(ref favOnly, "Favorites Only", y, w);
+                if (favOnly != ChaosGunController.ShowFavoritesOnly) { ChaosGunController.ShowFavoritesOnly = favOnly; SettingsManager.MarkDirty(); }
+
+                GUI.Label(new Rect(PAD, y, 60f, ROW), "Search:");
+                string newSQ = GUI.TextField(new Rect(PAD + 60f, y, w - 70f, ROW), ChaosGunController.ShaderSearchQuery ?? "");
+                if (newSQ != ChaosGunController.ShaderSearchQuery) ChaosGunController.ShaderSearchQuery = newSQ;
+                y += ROW + 4f;
+
                 y = Button("Refresh Shaders (" + ChaosGunController.ShaderCount + ")", y, 250f, 28f, () => ChaosGunController.RefreshShaderList());
 
                 if (ChaosGunController.ShaderCount > 0)
                 {
-                    y = Label("Shader: " + ChaosGunController.SelectedShaderName, y, w);
-                    y = Label("  (" + (ChaosGunController.SelectedShaderIndex + 1) + " / " + ChaosGunController.ShaderCount + ")", y, w);
+                    ChaosGunController.RebuildFilterIfNeeded();
+                    string favStar = ChaosGunController.IsCurrentShaderFavorited() ? "\u2605" : "\u2606";
+                    y = Label("Shader: " + ChaosGunController.FilteredShaderName, y, w);
+                    y = Label("  (" + (ChaosGunController.FilteredCursor + 1) + " / " + ChaosGunController.FilteredCount + ")", y, w);
 
                     float navW = (w - 10f) / 2f;
                     if (GUI.Button(new Rect(PAD, y, navW, ROW), "<< Prev", _cachedButtonStyle))
@@ -1701,6 +1805,7 @@ namespace BonelabUtilityMod
                         ChaosGunController.NextShader();
                     y += ROW + 4f;
 
+                    y = Button(favStar + " Toggle Favorite", y, 200f, 28f, () => { ChaosGunController.ToggleFavoriteCurrent(); SettingsManager.MarkDirty(); });
                     y = Button("Apply Shader", y, 200f, 28f, () => ChaosGunController.ApplyShaderToGun());
                     y = Button("Revert Shaders", y, 200f, 28f, () => ChaosGunController.RevertShaders());
                 }
@@ -2550,6 +2655,264 @@ namespace BonelabUtilityMod
                 bool rrDrop = RecoilRagdollController.DropGun;
                 y = Toggle(ref rrDrop, "Drop Gun", y, w);
                 RecoilRagdollController.DropGun = rrDrop;
+            }
+
+            y = CollapsibleHeader("HOMING THROW", ref _combatHomingThrow, y, w);
+            if (_combatHomingThrow)
+            {
+                bool htEnabled = HomingThrowController.Enabled;
+                y = Toggle(ref htEnabled, "Enabled", y, w);
+                HomingThrowController.Enabled = htEnabled;
+
+                TargetFilter htFilter = HomingThrowController.Filter;
+                y = EnumCycle("Target Filter", ref htFilter, y, w);
+                HomingThrowController.Filter = htFilter;
+
+                float htStrength = HomingThrowController.Strength;
+                y = Slider("Strength", ref htStrength, 1f, 50f, y, w, "F1");
+                HomingThrowController.Strength = htStrength;
+
+                float htSpeed = HomingThrowController.Speed;
+                y = Slider("Speed (0=throw)", ref htSpeed, 0f, 500f, y, w, "F0");
+                HomingThrowController.Speed = htSpeed;
+
+                float htDuration = HomingThrowController.Duration;
+                y = Slider("Duration (0=inf)", ref htDuration, 0f, 30f, y, w, "F1");
+                HomingThrowController.Duration = htDuration;
+
+                float htMinSpd = HomingThrowController.MinThrowSpeed;
+                y = Slider("Min Throw Speed", ref htMinSpd, 0f, 20f, y, w, "F1");
+                HomingThrowController.MinThrowSpeed = htMinSpd;
+
+                bool htRot = HomingThrowController.RotationLock;
+                y = Toggle(ref htRot, "Rotation Lock", y, w);
+                HomingThrowController.RotationLock = htRot;
+
+                bool htAccel = HomingThrowController.AccelEnabled;
+                y = Toggle(ref htAccel, "Acceleration", y, w);
+                HomingThrowController.AccelEnabled = htAccel;
+
+                float htAccelRate = HomingThrowController.AccelRate;
+                y = Slider("Accel Rate", ref htAccelRate, 0.1f, 10f, y, w, "F1");
+                HomingThrowController.AccelRate = htAccelRate;
+
+                bool htHead = HomingThrowController.TargetHead;
+                y = Toggle(ref htHead, "Target Head", y, w);
+                HomingThrowController.TargetHead = htHead;
+
+                bool htMom = HomingThrowController.Momentum;
+                y = Toggle(ref htMom, "Momentum", y, w);
+                HomingThrowController.Momentum = htMom;
+
+                float htStay = HomingThrowController.StayDuration;
+                y = Slider("Stay Duration", ref htStay, 0f, 30f, y, w, "F1");
+                HomingThrowController.StayDuration = htStay;
+
+                bool htRecall = HomingThrowController.RecallEnabled;
+                y = Toggle(ref htRecall, "Recall (Shield)", y, w);
+                HomingThrowController.RecallEnabled = htRecall;
+
+                float htRecSpd = HomingThrowController.RecallSpeed;
+                y = Slider("Recall Speed", ref htRecSpd, 1f, 50f, y, w, "F0");
+                HomingThrowController.RecallSpeed = htRecSpd;
+
+                float htRecStr = HomingThrowController.RecallStrength;
+                y = Slider("Recall Strength", ref htRecStr, 1f, 30f, y, w, "F1");
+                HomingThrowController.RecallStrength = htRecStr;
+
+                bool htFov = HomingThrowController.FovConeEnabled;
+                y = Toggle(ref htFov, "FOV Cone", y, w);
+                HomingThrowController.FovConeEnabled = htFov;
+
+                float htFovAngle = HomingThrowController.FovAngle;
+                y = Slider("FOV Angle", ref htFovAngle, 10f, 180f, y, w, "F0");
+                HomingThrowController.FovAngle = htFovAngle;
+            }
+
+            y = CollapsibleHeader("ESP", ref _combatESP, y, w);
+            if (_combatESP)
+            {
+                bool espOn = ESPController.Enabled;
+                y = Toggle(ref espOn, "Enabled", y, w);
+                ESPController.Enabled = espOn;
+
+                ESPMode espMode = ESPController.Mode;
+                y = EnumCycle("Mode", ref espMode, y, w);
+                ESPController.Mode = espMode;
+
+                ESPColorMode espColor = ESPController.ColorMode;
+                y = EnumCycle("Color Mode", ref espColor, y, w);
+                ESPController.ColorMode = espColor;
+
+                float espNear = ESPController.NearColor;
+                y = Slider("Near Color Dist", ref espNear, 1f, 100f, y, w, "F0");
+                ESPController.NearColor = espNear;
+
+                float espFar = ESPController.FarColor;
+                y = Slider("Far Color Dist", ref espFar, 10f, 500f, y, w, "F0");
+                ESPController.FarColor = espFar;
+
+                float espTW = ESPController.TracerWidth;
+                y = Slider("Tracer Width", ref espTW, 0.001f, 0.05f, y, w, "F3");
+                ESPController.TracerWidth = espTW;
+
+                float espSW = ESPController.SkeletonWidth;
+                y = Slider("Skeleton Width", ref espSW, 0.001f, 0.05f, y, w, "F3");
+                ESPController.SkeletonWidth = espSW;
+
+                if (ESPController.ColorMode == ESPColorMode.CustomRGB || ESPController.ColorMode == ESPColorMode.Gradient)
+                {
+                    float ecR = ESPController.CustomR;
+                    y = Slider("Color R", ref ecR, 0f, 1f, y, w, "F2");
+                    ESPController.CustomR = ecR;
+                    float ecG = ESPController.CustomG;
+                    y = Slider("Color G", ref ecG, 0f, 1f, y, w, "F2");
+                    ESPController.CustomG = ecG;
+                    float ecB = ESPController.CustomB;
+                    y = Slider("Color B", ref ecB, 0f, 1f, y, w, "F2");
+                    ESPController.CustomB = ecB;
+                }
+                if (ESPController.ColorMode == ESPColorMode.Gradient)
+                {
+                    float egR2 = ESPController.GradientR2;
+                    y = Slider("Gradient R2", ref egR2, 0f, 1f, y, w, "F2");
+                    ESPController.GradientR2 = egR2;
+                    float egG2 = ESPController.GradientG2;
+                    y = Slider("Gradient G2", ref egG2, 0f, 1f, y, w, "F2");
+                    ESPController.GradientG2 = egG2;
+                    float egB2 = ESPController.GradientB2;
+                    y = Slider("Gradient B2", ref egB2, 0f, 1f, y, w, "F2");
+                    ESPController.GradientB2 = egB2;
+                }
+                if (ESPController.ColorMode == ESPColorMode.Rainbow)
+                {
+                    float espRS = ESPController.RainbowSpeed;
+                    y = Slider("Rainbow Speed", ref espRS, 0.1f, 5f, y, w, "F1");
+                    ESPController.RainbowSpeed = espRS;
+                }
+            }
+
+            y = Gap(y, 5f);
+            y = CollapsibleHeader("ITEM ESP", ref _combatItemESP, y, w);
+            if (_combatItemESP)
+            {
+                bool ie = ESPController.ItemESPEnabled;
+                y = Toggle(ref ie, "Enabled", y, w);
+                ESPController.ItemESPEnabled = ie;
+
+                ItemESPFilter ifilt = ESPController.ItemFilter;
+                y = EnumCycle("Filter", ref ifilt, y, w);
+                ESPController.ItemFilter = ifilt;
+
+                float imd = ESPController.ItemMaxDistance;
+                y = Slider("Max Distance", ref imd, 10f, 500f, y, w, "F0");
+                ESPController.ItemMaxDistance = imd;
+
+                float isi = ESPController.ItemScanInterval;
+                y = Slider("Scan Interval", ref isi, 0.1f, 2f, y, w, "F1");
+                ESPController.ItemScanInterval = isi;
+
+                bool il = ESPController.ItemShowLabels;
+                y = Toggle(ref il, "Show Labels", y, w);
+                ESPController.ItemShowLabels = il;
+
+                float ibh = ESPController.ItemBeamHeight;
+                y = Slider("Beam Height", ref ibh, 5f, 200f, y, w, "F0");
+                ESPController.ItemBeamHeight = ibh;
+
+                float ibw = ESPController.ItemBeamWidth;
+                y = Slider("Beam Width", ref ibw, 0.01f, 0.5f, y, w, "F2");
+                ESPController.ItemBeamWidth = ibw;
+
+                y = Label("--- Category Colors ---", y, w);
+
+                float pcr = ESPController.ItemColorR;
+                y = Slider("Prop R", ref pcr, 0f, 1f, y, w, "F2");
+                ESPController.ItemColorR = pcr;
+                float pcg = ESPController.ItemColorG;
+                y = Slider("Prop G", ref pcg, 0f, 1f, y, w, "F2");
+                ESPController.ItemColorG = pcg;
+                float pcb = ESPController.ItemColorB;
+                y = Slider("Prop B", ref pcb, 0f, 1f, y, w, "F2");
+                ESPController.ItemColorB = pcb;
+
+                float gcr = ESPController.ItemGunR;
+                y = Slider("Gun R", ref gcr, 0f, 1f, y, w, "F2");
+                ESPController.ItemGunR = gcr;
+                float gcg = ESPController.ItemGunG;
+                y = Slider("Gun G", ref gcg, 0f, 1f, y, w, "F2");
+                ESPController.ItemGunG = gcg;
+                float gcb = ESPController.ItemGunB;
+                y = Slider("Gun B", ref gcb, 0f, 1f, y, w, "F2");
+                ESPController.ItemGunB = gcb;
+
+                float ncr = ESPController.ItemNpcR;
+                y = Slider("NPC R", ref ncr, 0f, 1f, y, w, "F2");
+                ESPController.ItemNpcR = ncr;
+                float ncg = ESPController.ItemNpcG;
+                y = Slider("NPC G", ref ncg, 0f, 1f, y, w, "F2");
+                ESPController.ItemNpcG = ncg;
+                float ncb = ESPController.ItemNpcB;
+                y = Slider("NPC B", ref ncb, 0f, 1f, y, w, "F2");
+                ESPController.ItemNpcB = ncb;
+
+                float mcr = ESPController.ItemMeleeR;
+                y = Slider("Melee R", ref mcr, 0f, 1f, y, w, "F2");
+                ESPController.ItemMeleeR = mcr;
+                float mcg = ESPController.ItemMeleeG;
+                y = Slider("Melee G", ref mcg, 0f, 1f, y, w, "F2");
+                ESPController.ItemMeleeG = mcg;
+                float mcb = ESPController.ItemMeleeB;
+                y = Slider("Melee B", ref mcb, 0f, 1f, y, w, "F2");
+                ESPController.ItemMeleeB = mcb;
+            }
+
+            y = CollapsibleHeader("AIM ASSIST", ref _combatAimAssist, y, w);
+            if (_combatAimAssist)
+            {
+                bool aaOn = AimAssistController.Enabled;
+                y = Toggle(ref aaOn, "Enabled", y, w);
+                AimAssistController.Enabled = aaOn;
+
+                bool aaAim = AimAssistController.AimBotEnabled;
+                y = Toggle(ref aaAim, "Aimbot", y, w);
+                AimAssistController.AimBotEnabled = aaAim;
+
+                float aaFov = AimAssistController.AimFOV;
+                y = Slider("Aimbot FOV", ref aaFov, 5f, 360f, y, w, "F0");
+                AimAssistController.AimFOV = aaFov;
+
+                AimTarget aaTgt = AimAssistController.Target;
+                y = EnumCycle("Target", ref aaTgt, y, w);
+                AimAssistController.Target = aaTgt;
+
+                bool aaTrig = AimAssistController.TriggerBotEnabled;
+                y = Toggle(ref aaTrig, "Triggerbot", y, w);
+                AimAssistController.TriggerBotEnabled = aaTrig;
+
+                float aaTrigDelay = AimAssistController.TriggerBotDelay;
+                y = Slider("Triggerbot Delay", ref aaTrigDelay, 0f, 0.5f, y, w, "F2");
+                AimAssistController.TriggerBotDelay = aaTrigDelay;
+
+                bool aaHS = AimAssistController.HeadshotsOnly;
+                y = Toggle(ref aaHS, "Headshots Only", y, w);
+                AimAssistController.HeadshotsOnly = aaHS;
+
+                bool aaBD = AimAssistController.BulletDropComp;
+                y = Toggle(ref aaBD, "Bullet Drop Comp", y, w);
+                AimAssistController.BulletDropComp = aaBD;
+
+                bool aaMC = AimAssistController.MovementComp;
+                y = Toggle(ref aaMC, "Movement Comp", y, w);
+                AimAssistController.MovementComp = aaMC;
+
+                bool aaAC = AimAssistController.AccelerationComp;
+                y = Toggle(ref aaAC, "Acceleration Comp", y, w);
+                AimAssistController.AccelerationComp = aaAC;
+
+                CompensationSmoothing aaSmooth = AimAssistController.Smoothing;
+                y = EnumCycle("Smoothing", ref aaSmooth, y, w);
+                AimAssistController.Smoothing = aaSmooth;
             }
         }
 
