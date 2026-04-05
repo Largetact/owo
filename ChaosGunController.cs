@@ -5,6 +5,7 @@ using UnityEngine.Rendering;
 using BoneLib;
 using Il2CppSLZ.Marrow;
 using Il2CppSLZ.Marrow.Data;
+using Il2CppSLZ.Marrow.Warehouse;
 using Il2CppInterop.Runtime.InteropTypes.Arrays;
 using System.Collections.Generic;
 using System.Linq;
@@ -95,6 +96,18 @@ namespace BonelabUtilityMod
             _lastSearchQuery = null;
         }
 
+        // ── Shader Pallet Metadata ──
+        public struct ShaderMeta
+        {
+            public string PalletName;
+            public string AuthorName;
+        }
+        private static Dictionary<string, ShaderMeta> _shaderMeta = new Dictionary<string, ShaderMeta>();
+        public static bool IsScanningPallets = false;
+        private static int _scanRemaining = 0;
+        private static int _scanTotal = 0;
+        public static string ScanProgress => IsScanningPallets ? $"Scanning... ({_scanTotal - _scanRemaining}/{_scanTotal})" : "";
+
         public static int FilteredCount => _filteredIndices.Count;
         public static int FilteredCursor => _filteredCursor;
 
@@ -107,6 +120,32 @@ namespace BonelabUtilityMod
                 int realIdx = _filteredIndices[_filteredCursor];
                 return _shaderNames[realIdx];
             }
+        }
+
+        public static string FilteredShaderPalletInfo
+        {
+            get
+            {
+                RebuildFilterIfNeeded();
+                if (_filteredIndices.Count == 0) return "";
+                int realIdx = _filteredIndices[_filteredCursor];
+                return GetShaderPalletInfo(_shaderNames[realIdx]);
+            }
+        }
+
+        public static string GetShaderPalletInfo(string shaderName)
+        {
+            if (_shaderMeta.TryGetValue(shaderName, out var meta))
+            {
+                if (!string.IsNullOrEmpty(meta.PalletName))
+                {
+                    string info = meta.PalletName;
+                    if (!string.IsNullOrEmpty(meta.AuthorName))
+                        info += " by " + meta.AuthorName;
+                    return info;
+                }
+            }
+            return "";
         }
 
         public static void RebuildFilterIfNeeded()
@@ -174,6 +213,122 @@ namespace BonelabUtilityMod
             _lastSearchQuery = null; // force re-filter
             if (SelectedShaderIndex >= _shaderNames.Count)
                 SelectedShaderIndex = 0;
+        }
+
+        /// <summary>
+        /// Scan ALL mod pallets and load their crate assets to discover every shader.
+        /// Also builds pallet/author metadata for each shader found.
+        /// </summary>
+        public static void ScanPalletShaders()
+        {
+            if (IsScanningPallets) return;
+            try
+            {
+                var warehouse = AssetWarehouse.Instance;
+                if (warehouse == null) return;
+
+                var pallets = warehouse.GetPallets();
+                if (pallets == null) return;
+
+                IsScanningPallets = true;
+                _scanRemaining = 0;
+                _scanTotal = 0;
+
+                for (int p = 0; p < pallets.Count; p++)
+                {
+                    var pallet = pallets[p];
+                    if (pallet == null) continue;
+
+                    string palletName = "";
+                    string palletAuthor = "";
+                    try
+                    {
+                        palletName = pallet.name ?? "Unknown";
+                        palletAuthor = pallet.Author ?? "";
+                    }
+                    catch { continue; }
+
+                    Il2CppSystem.Collections.Generic.List<Crate> crates = null;
+                    try { crates = pallet.Crates; } catch { continue; }
+                    if (crates == null) continue;
+
+                    for (int c = 0; c < crates.Count; c++)
+                    {
+                        var crate = crates[c];
+                        if (crate == null) continue;
+
+                        _scanTotal++;
+                        _scanRemaining++;
+
+                        string pn = palletName;
+                        string pa = palletAuthor;
+
+                        try
+                        {
+                            System.Action<UnityEngine.Object> managedCb = (UnityEngine.Object obj) =>
+                            {
+                                _scanRemaining--;
+                                try { ProcessLoadedAssetForShaders(obj, pn, pa); } catch { }
+                                if (_scanRemaining <= 0 && IsScanningPallets)
+                                {
+                                    IsScanningPallets = false;
+                                    RefreshShaderList();
+                                    Main.MelonLog.Msg($"[Shader Scan] Complete. {_shaderMeta.Count} shader sources, {_shaderNames.Count} total shaders.");
+                                }
+                            };
+                            crate.LoadAsset((Il2CppSystem.Action<UnityEngine.Object>)managedCb);
+                        }
+                        catch
+                        {
+                            _scanRemaining--;
+                            if (_scanRemaining <= 0 && IsScanningPallets)
+                            {
+                                IsScanningPallets = false;
+                                RefreshShaderList();
+                            }
+                        }
+                    }
+                }
+
+                if (_scanTotal == 0)
+                    IsScanningPallets = false;
+                else
+                    Main.MelonLog.Msg($"[Shader Scan] Scanning {_scanTotal} crates from {pallets.Count} pallets...");
+            }
+            catch
+            {
+                IsScanningPallets = false;
+            }
+        }
+
+        private static void ProcessLoadedAssetForShaders(UnityEngine.Object obj, string palletName, string authorName)
+        {
+            if (obj == null) return;
+            var go = obj.TryCast<GameObject>();
+            if (go == null) return;
+
+            var renderers = go.GetComponentsInChildren<Renderer>(true);
+            if (renderers == null) return;
+
+            foreach (Renderer r in renderers)
+            {
+                if (r == null) continue;
+                try
+                {
+                    foreach (Material mat in (Il2CppArrayBase<Material>)(object)r.sharedMaterials)
+                    {
+                        if (mat == null || mat.shader == null) continue;
+                        string sn = mat.shader.name;
+                        if (string.IsNullOrEmpty(sn)) continue;
+
+                        if (!_shaderMeta.ContainsKey(sn))
+                        {
+                            _shaderMeta[sn] = new ShaderMeta { PalletName = palletName, AuthorName = authorName };
+                        }
+                    }
+                }
+                catch { }
+            }
         }
 
         public static void ApplyShaderToGun()

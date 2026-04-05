@@ -1570,10 +1570,20 @@ namespace BonelabUtilityMod
                     ChaosGunController.RefreshShaderList
                 );
                 shaderLibPage.CreateFunction(
+                    ChaosGunController.IsScanningPallets ? ChaosGunController.ScanProgress : "Scan All Mod Shaders",
+                    Color.yellow,
+                    ChaosGunController.ScanPalletShaders
+                );
+                shaderLibPage.CreateFunction(
                     $"Current: {ChaosGunController.FilteredShaderName}",
                     Color.white,
                     () => { }
                 );
+                {
+                    string srcInfo = ChaosGunController.FilteredShaderPalletInfo;
+                    if (!string.IsNullOrEmpty(srcInfo))
+                        shaderLibPage.CreateFunction($"Source: {srcInfo}", Color.gray, () => { });
+                }
                 shaderLibPage.CreateFunction(
                     ChaosGunController.IsCurrentShaderFavorited() ? "\u2605 Unfavorite" : "\u2606 Favorite",
                     Color.magenta,

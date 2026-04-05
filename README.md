@@ -42,7 +42,7 @@
 ### Gun Visuals
 
 - **Custom Gun Color** — Full RGBA color customization for held guns with gradient mode (two-color animated ping-pong along the barrel axis), adjustable gradient speed and spread.
-- **Shader Library** — Browse all loaded game shaders, preview by name, apply any shader to held guns, and revert. Favorites system to bookmark preferred shaders, text search to filter by name, favorites-only mode. Automatically skips grip/gizmo/grab components to preserve gun handling. Filters hidden/GUI/internal shaders automatically.
+- **Shader Library** — Browse all loaded game shaders, preview by name, apply any shader to held guns, and revert. "Scan All Mod Shaders" loads every shader from all installed mod pallets at once without needing to spawn items. Shows source pallet name and author for each shader. Favorites system to bookmark preferred shaders, text search to filter by name, favorites-only mode. Automatically skips grip/gizmo/grab components to preserve gun handling. Filters hidden/GUI/internal shaders automatically.
 - **Texture Editor** — Generate and apply procedural textures to held guns. Modes: Original, Solid color, Gradient, and Noise (Perlin-based). Supports UV scroll animation, configurable noise scale, and per-channel color control.
 - **Transparency** — Make guns transparent with adjustable alpha.
 

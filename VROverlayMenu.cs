@@ -1117,11 +1117,17 @@ namespace BonelabUtilityMod
                 AddToggle("Auto-Apply on Grab", ChaosGunController.AutoApplyShader, v => ChaosGunController.AutoApplyShader = v);
                 AddToggle("Favorites Only", ChaosGunController.ShowFavoritesOnly, v => { ChaosGunController.ShowFavoritesOnly = v; SettingsManager.MarkDirty(); });
                 AddButton("Refresh Shaders (" + ChaosGunController.ShaderCount + ")", () => ChaosGunController.RefreshShaderList());
+                if (!ChaosGunController.IsScanningPallets)
+                    AddButton("Scan All Mod Shaders", () => ChaosGunController.ScanPalletShaders());
+                else
+                    AddLabel(ChaosGunController.ScanProgress);
                 if (ChaosGunController.ShaderCount > 0)
                 {
                     ChaosGunController.RebuildFilterIfNeeded();
                     string favStar = ChaosGunController.IsCurrentShaderFavorited() ? "\u2605" : "\u2606";
                     AddLabel("Shader: " + ChaosGunController.FilteredShaderName);
+                    string palletInfo = ChaosGunController.FilteredShaderPalletInfo;
+                    if (!string.IsNullOrEmpty(palletInfo)) AddLabel("  Source: " + palletInfo);
                     AddLabel("  (" + (ChaosGunController.FilteredCursor + 1) + "/" + ChaosGunController.FilteredCount + ")");
                     AddButton(favStar + " Toggle Favorite", () => { ChaosGunController.ToggleFavoriteCurrent(); SettingsManager.MarkDirty(); });
                     AddButton("<< Prev Shader", () => ChaosGunController.PrevShader());

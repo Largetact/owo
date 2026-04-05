@@ -1791,11 +1791,18 @@ namespace BonelabUtilityMod
 
                 y = Button("Refresh Shaders (" + ChaosGunController.ShaderCount + ")", y, 250f, 28f, () => ChaosGunController.RefreshShaderList());
 
+                if (!ChaosGunController.IsScanningPallets)
+                    y = Button("Scan All Mod Shaders", y, 250f, 28f, () => ChaosGunController.ScanPalletShaders());
+                else
+                    y = Label(ChaosGunController.ScanProgress, y, w);
+
                 if (ChaosGunController.ShaderCount > 0)
                 {
                     ChaosGunController.RebuildFilterIfNeeded();
                     string favStar = ChaosGunController.IsCurrentShaderFavorited() ? "\u2605" : "\u2606";
                     y = Label("Shader: " + ChaosGunController.FilteredShaderName, y, w);
+                    string palletInfo = ChaosGunController.FilteredShaderPalletInfo;
+                    if (!string.IsNullOrEmpty(palletInfo)) y = Label("  Source: " + palletInfo, y, w);
                     y = Label("  (" + (ChaosGunController.FilteredCursor + 1) + " / " + ChaosGunController.FilteredCount + ")", y, w);
 
                     float navW = (w - 10f) / 2f;
